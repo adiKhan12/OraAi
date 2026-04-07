@@ -1,0 +1,19 @@
+{
+  "name": "oraai",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "npx @electron/packager . OraAI --platform=darwin --arch=arm64 --overwrite --app-bundle-id=com.oraai.app --app-version=1.0.0 --extra-resource=.env"
+  },
+  "author": "Adnan Khan",
+  "license": "ISC",
+  "description": "OraAI — Your AI screen companion that sees, listens, and guides you",
+  "dependencies": {
+    "dotenv": "^17.4.1",
+    "electron": "^41.1.1"
+  },
+  "devDependencies": {
+    "@electron/packager": "^19.1.0"
+  }
+}
