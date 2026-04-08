@@ -152,11 +152,6 @@
     }
   }
 
-  // --- Debug: F2 logs mouse position ---
-  window.oraAPI.onDebugMouse((point) => {
-    console.log(`DEBUG: screenMouse(${point.x},${point.y}) orbPos(${Math.round(orb.x)},${Math.round(orb.y)}) canvasSize(${window.innerWidth},${window.innerHeight}) dpr=${window.devicePixelRatio}`);
-  });
-
   // --- Start ---
   orb.start();
   console.log('OraAI: Ready — press Option+Space to talk');

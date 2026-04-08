@@ -88,69 +88,6 @@ class ScreenCapture {
     }
   }
 
-  drawGrid(w, h) {
-    const ctx = this.ctx;
-    const step = 100; // Grid every 100px for precision
-
-    ctx.save();
-
-    // Thin lines every 100px
-    ctx.strokeStyle = 'rgba(255, 0, 0, 0.25)';
-    ctx.lineWidth = 1;
-    for (let x = step; x < w; x += step) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-    }
-    for (let y = step; y < h; y += step) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-    }
-
-    // Bold lines every 200px
-    ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-    ctx.lineWidth = 2;
-    for (let x = 200; x < w; x += 200) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-    }
-    for (let y = 200; y < h; y += 200) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-    }
-
-    // Labels at every 200px intersection with background boxes
-    ctx.font = 'bold 16px monospace';
-    for (let x = 200; x < w; x += 200) {
-      for (let y = 200; y < h; y += 200) {
-        const label = `${x},${y}`;
-        const tw = ctx.measureText(label).width;
-        // Background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(x + 2, y - 18, tw + 6, 20);
-        // Text
-        ctx.fillStyle = 'rgba(255, 50, 50, 1.0)';
-        ctx.fillText(label, x + 5, y - 2);
-      }
-    }
-
-    // Edge labels for X axis (top)
-    for (let x = 200; x < w; x += 200) {
-      const label = x.toString();
-      const tw = ctx.measureText(label).width;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      ctx.fillRect(x - tw / 2 - 2, 2, tw + 4, 20);
-      ctx.fillStyle = 'rgba(255, 50, 50, 1.0)';
-      ctx.fillText(label, x - tw / 2, 17);
-    }
-
-    // Edge labels for Y axis (left)
-    for (let y = 200; y < h; y += 200) {
-      const label = y.toString();
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      ctx.fillRect(2, y - 18, 50, 20);
-      ctx.fillStyle = 'rgba(255, 50, 50, 1.0)';
-      ctx.fillText(label, 5, y - 2);
-    }
-
-    ctx.restore();
-  }
-
   destroy() {
     if (this.stream) {
       this.stream.getTracks().forEach((t) => t.stop());
