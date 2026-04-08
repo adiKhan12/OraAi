@@ -48,7 +48,12 @@ Download the latest zip for your platform from [Releases](https://github.com/adi
 
 ### Windows
 1. Unzip the folder anywhere
-2. Create a `.env` file inside the `OraAI-win32-x64` folder:
+2. Create the config folder and `.env` file — open Command Prompt and run:
+   ```
+   mkdir %USERPROFILE%\.oraai
+   notepad %USERPROFILE%\.oraai\.env
+   ```
+   Paste and save:
    ```
    OPENROUTER_API_KEY=your-key-here
    ELEVENLABS_API_KEY=your-key-here
