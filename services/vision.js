@@ -86,16 +86,15 @@ Rules:
   // ──────────────────────────────────────────────
 
   async analyzeWithVisionFallback(screenshotBase64, question, origWidth, origHeight) {
-    // Clicky-style: downscale to 1280px max, use Claude, inline [POINT:x,y:label] format
+    // Pass 1: full screenshot downscaled — get rough answer + approximate coordinates
     const { base64: scaledBase64, width: scaledW, height: scaledH } =
       await this.downscaleScreenshot(screenshotBase64, origWidth, origHeight, FALLBACK_MAX_DIM);
 
     const scaleX = origWidth / scaledW;
     const scaleY = origHeight / scaledH;
 
-    console.log(`OraAI: Vision fallback — ${origWidth}x${origHeight} → ${scaledW}x${scaledH} (scale ${scaleX.toFixed(2)}x)`);
+    console.log(`OraAI: Vision pass 1 — ${origWidth}x${origHeight} → ${scaledW}x${scaledH} (scale ${scaleX.toFixed(2)}x)`);
 
-    // Clicky-style system prompt: natural text response with [POINT:x,y:label] at the end
     const systemPrompt = `You are OraAI, a friendly screen tutor that helps users navigate applications on their Mac.
 
 You will receive a screenshot of the user's current screen. The user will ask you a question about what they see.
@@ -122,7 +121,6 @@ Example response for a screen question:
 Example response for a general question:
 "JavaScript is a programming language used for web development. It runs in browsers and can also be used on servers with Node.js."`;
 
-    // Use Claude Sonnet for the fallback — better at coordinate estimation than GPT-4o
     const fallbackModel = 'anthropic/claude-sonnet-4';
 
     const userMessage = {
@@ -170,8 +168,140 @@ Example response for a general question:
       this.conversationHistory.shift();
     }
 
-    // Parse the [POINT:x,y:label] from the response
-    return this.parseClickyResponse(content, scaleX, scaleY);
+    // Parse pass 1 result
+    const pass1 = this.parseClickyResponse(content, scaleX, scaleY);
+
+    // If no point found (speak-only), return as-is
+    if (pass1.type !== 'guide' || !pass1.steps?.length) {
+      return pass1;
+    }
+
+    // Pass 2: crop around the rough coordinates and refine
+    const roughX = pass1.steps[0].x;
+    const roughY = pass1.steps[0].y;
+    const spokenText = pass1.steps[0].instruction;
+
+    console.log(`OraAI: Vision pass 1 rough → screen(${roughX},${roughY})`);
+
+    try {
+      const refined = await this.refineCoordinates(
+        screenshotBase64, origWidth, origHeight,
+        roughX, roughY, spokenText, fallbackModel
+      );
+      if (refined) {
+        pass1.steps[0].x = refined.x;
+        pass1.steps[0].y = refined.y;
+        console.log(`OraAI: Vision pass 2 refined → screen(${refined.x},${refined.y})`);
+      }
+    } catch (e) {
+      console.warn('OraAI: Pass 2 refinement failed, using pass 1 coordinates:', e.message);
+    }
+
+    return pass1;
+  }
+
+  // ──────────────────────────────────────────────
+  //  Pass 2: Crop + refine coordinates
+  // ──────────────────────────────────────────────
+
+  async refineCoordinates(screenshotBase64, screenW, screenH, roughX, roughY, context, model) {
+    // Crop a generous region around the rough point from the full-resolution screenshot
+    // Use 40% of screen dimensions as crop size, minimum 800x600
+    const cropW = Math.max(800, Math.round(screenW * 0.4));
+    const cropH = Math.max(600, Math.round(screenH * 0.4));
+
+    // Center the crop on the rough point, clamped to screen bounds
+    const cropX = Math.max(0, Math.min(roughX - Math.round(cropW / 2), screenW - cropW));
+    const cropY = Math.max(0, Math.min(roughY - Math.round(cropH / 2), screenH - cropH));
+
+    console.log(`OraAI: Vision pass 2 — crop ${cropW}x${cropH} at (${cropX},${cropY}) from ${screenW}x${screenH}`);
+
+    // Extract the crop from the full-resolution screenshot
+    const cropBase64 = await this.cropScreenshot(screenshotBase64, cropX, cropY, cropW, cropH);
+
+    // Downscale the crop to a reasonable size for the AI
+    const { base64: scaledCrop, width: scaledCropW, height: scaledCropH } =
+      await this.downscaleScreenshot(cropBase64, cropW, cropH, FALLBACK_MAX_DIM);
+
+    const cropScaleX = cropW / scaledCropW;
+    const cropScaleY = cropH / scaledCropH;
+
+    const systemPrompt = `You are OraAI, a screen tutor. You are looking at a ZOOMED-IN portion of a user's screen.
+
+The user's question was already answered. Your job is to find the EXACT position of the target element in this zoomed view.
+
+The target element: "${context.substring(0, 200)}"
+
+Look at this zoomed screenshot and find the exact element being described. Put a [POINT:x,y:label] tag at the PRECISE CENTER of that element.
+
+COORDINATE RULES:
+- This zoomed image is ${scaledCropW} pixels wide and ${scaledCropH} pixels tall
+- (0,0) is the top-left of this crop, (${scaledCropW},${scaledCropH}) is bottom-right
+- Be VERY precise — this is a close-up view, accuracy matters
+- Target the exact center of the button, icon, or text field`;
+
+    const userMessage = {
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${scaledCrop}` } },
+        { type: 'text', text: `Zoomed screenshot (${scaledCropW}x${scaledCropH}px). Find the exact element and mark it with [POINT:x,y:label].` },
+      ],
+    };
+
+    const response = await fetch(this.endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://oraai.app',
+        'X-Title': 'OraAI',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: systemPrompt }, userMessage],
+        max_tokens: 256,
+        temperature: 0.2,
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content || '';
+    const pointMatch = reply.match(/\[POINT:(\d+),(\d+)(?::([^\]]*))?\]/);
+
+    if (!pointMatch) return null;
+
+    const cropImgX = parseInt(pointMatch[1]);
+    const cropImgY = parseInt(pointMatch[2]);
+
+    // Map: crop image coords → crop pixel coords → screen coords
+    const screenX = cropX + Math.round(cropImgX * cropScaleX);
+    const screenY = cropY + Math.round(cropImgY * cropScaleY);
+
+    return { x: screenX, y: screenY };
+  }
+
+  // ──────────────────────────────────────────────
+  //  Crop a region from a base64 screenshot
+  // ──────────────────────────────────────────────
+
+  async cropScreenshot(base64, x, y, w, h) {
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = `data:image/jpeg;base64,${base64}`;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    return dataUrl.split(',')[1];
   }
 
   // ──────────────────────────────────────────────
