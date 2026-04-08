@@ -7,7 +7,7 @@
     "build": "npx @electron/packager . OraAI --platform=darwin --arch=arm64 --overwrite --app-bundle-id=com.oraai.app --app-version=1.0.0 --extra-resource=.env"
   },
   "author": "Adnan Khan",
-  "license": "ISC",
+  "license": "CC-BY-NC-4.0",
   "description": "OraAI — Your AI screen companion that sees, listens, and guides you",
   "dependencies": {
     "dotenv": "^17.4.1",

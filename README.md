@@ -85,4 +85,4 @@ Inspired by [Clicky by Farza Majeed](https://www.linkedin.com/posts/farza-majeed
 
 ## License
 
-MIT
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — free to use, modify, and share for non-commercial purposes. Commercial use requires permission from the author.
