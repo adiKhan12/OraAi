@@ -17,7 +17,8 @@ npx @electron/packager . OraAI \
   --app-bundle-id=com.oraai.app \
   --app-version="${VERSION}" \
   --extend-info=Info.plist \
-  --extra-resource=helpers/ax-elements
+  --extra-resource=helpers/ax-elements \
+  --extra-resource=.env
 
 # 3. Code sign
 echo "Signing..."
