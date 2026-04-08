@@ -56,10 +56,20 @@ jobs:
           body: |
             ## OraAI ${{ github.ref_name }}
 
-            **Download the zip → Unzip → Drag OraAI.app to Applications → Open it.**
+            ### Install
+            1. Download the `.zip` below, unzip, drag `OraAI.app` to Applications
+            2. Add your API keys — open Terminal and run:
+            ```
+            mkdir -p ~/.oraai
+            nano ~/.oraai/.env
+            ```
+            Paste this and save:
+            ```
+            OPENROUTER_API_KEY=your-key-here
+            ELEVENLABS_API_KEY=your-key-here
+            ```
+            Get keys from [OpenRouter](https://openrouter.ai) and [ElevenLabs](https://elevenlabs.io)
+            3. Open OraAI — grant Microphone, Screen Recording, and Accessibility when prompted
+            4. **Option+Space** to talk
 
-            On first launch, grant Microphone, Screen Recording, and Accessibility when prompted.
-
-            You'll need API keys from [OpenRouter](https://openrouter.ai) and [ElevenLabs](https://elevenlabs.io) — create a `.env` file next to the app with your keys. See README for details.
-
-            **Option+Space** to talk. To uninstall, drag to Trash.
+            To uninstall, drag OraAI.app to Trash and `rm -rf ~/.oraai`

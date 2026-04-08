@@ -25,7 +25,23 @@ This gives way better accuracy than asking an AI model to guess pixel coordinate
 - **Thinking** — color-cycling spinner (transcribing + screenshotting + querying AI)
 - **Guiding** — bright purple/gold, detaches from cursor, moves to targets with particle trail
 
-## Setup
+## Quick install (download release)
+
+1. Download the latest `.zip` from [Releases](https://github.com/adiKhan12/OraAi/releases)
+2. Unzip and drag `OraAI.app` to your Applications folder
+3. Add your API keys — open Terminal and run:
+   ```bash
+   mkdir -p ~/.oraai
+   cat > ~/.oraai/.env << 'EOF'
+   OPENROUTER_API_KEY=your-key-here
+   ELEVENLABS_API_KEY=your-key-here
+   EOF
+   ```
+   Get keys from [OpenRouter](https://openrouter.ai) and [ElevenLabs](https://elevenlabs.io)
+4. Open OraAI and grant permissions when prompted
+5. **Option+Space** to talk
+
+## Build from source
 
 ```bash
 git clone https://github.com/adiKhan12/OraAi.git
@@ -33,30 +49,25 @@ cd OraAi
 npm install
 ```
 
-Create a `.env` file:
-```
+Add your API keys:
+```bash
+mkdir -p ~/.oraai
+cat > ~/.oraai/.env << 'EOF'
 OPENROUTER_API_KEY=your-key-here
 ELEVENLABS_API_KEY=your-key-here
+EOF
 ```
 
-Compile the accessibility helper:
+Compile the accessibility helper and run:
 ```bash
 swiftc -O -o helpers/ax-elements helpers/ax-elements.swift -framework Cocoa
-```
-
-Run in dev:
-```bash
 npm start
 ```
 
-Build the app:
+Build the `.app` bundle:
 ```bash
-npm install --save-dev @electron/packager
-npx @electron/packager . OraAI --platform=darwin --arch=arm64 --overwrite --app-bundle-id=com.oraai.app --extend-info=Info.plist --extra-resource=.env --extra-resource=helpers/ax-elements
-codesign --force --deep --sign - OraAI-darwin-arm64/OraAI.app
+npm run build
 ```
-
-Then open `OraAI-darwin-arm64/OraAI.app`.
 
 ## Permissions
 

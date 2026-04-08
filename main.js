@@ -3,9 +3,11 @@ const fs = require('fs');
 
 // Load .env from multiple possible locations (dev vs packaged)
 let envLoaded = false;
+const os = require('os');
 const envPaths = [
-  path.join(__dirname, '.env'),
-  path.join(process.resourcesPath || '', '.env'),
+  path.join(os.homedir(), '.oraai', '.env'),       // ~/.oraai/.env (recommended for users)
+  path.join(__dirname, '.env'),                      // dev mode
+  path.join(process.resourcesPath || '', '.env'),    // packaged (extra-resource)
   path.join(__dirname, '..', '.env'),
   path.join(__dirname, '..', 'Resources', '.env'),
 ];
