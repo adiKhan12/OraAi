@@ -98,3 +98,42 @@ html, body {
   0% { transform: translate(-50%, -50%) scale(0.8); opacity: 1; }
   100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
 }
+
+/* Transcript bar — shows what the user said */
+#transcript-bar {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 15, 20, 0.88);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
+  max-width: 600px;
+  text-align: center;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#transcript-bar.visible {
+  opacity: 1;
+}
+
+#transcript-bar.listening {
+  border-color: rgba(255, 160, 40, 0.3);
+}
+
+#transcript-bar .label {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  margin-bottom: 2px;
+}

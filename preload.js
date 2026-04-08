@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('oraAPI', {
   getScreenInfo: () => ipcRenderer.invoke('get-screen-info'),
   getAXElements: () => ipcRenderer.invoke('get-ax-elements'),
   onDebugMouse: (callback) => ipcRenderer.on('debug-mouse', (_, point) => callback(point)),
+  onSettingChanged: (callback) => ipcRenderer.on('setting-changed', (_, settings) => callback(settings)),
   saveDebugScreenshot: (base64) => ipcRenderer.invoke('save-debug-screenshot', base64),
 });

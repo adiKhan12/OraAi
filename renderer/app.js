@@ -4,6 +4,7 @@
   // --- Init ---
   const config = await window.oraAPI.getConfig();
   const canvas = document.getElementById('orb-canvas');
+  const transcriptBar = document.getElementById('transcript-bar');
 
   const stateMachine = new StateMachine();
   const orb = new OrbRenderer(canvas);
@@ -22,7 +23,7 @@
     console.error('OraAI: Microphone access denied', e);
   }
 
-  // Initialize screen capture (triggers macOS system picker)
+  // Initialize screen capture
   console.log('OraAI: Requesting screen sharing...');
   const screenOk = await screenCapture.init();
   if (screenOk) {
@@ -31,22 +32,51 @@
     console.error('OraAI: Screen sharing denied — will retry on first query');
   }
 
-  // --- Wire up state changes to orb ---
+  // --- Transcript bar helpers ---
+  let transcriptEnabled = true;
+
+  window.oraAPI.onSettingChanged((settings) => {
+    if (settings.showTranscript !== undefined) {
+      transcriptEnabled = settings.showTranscript;
+      if (!transcriptEnabled) hideTranscript();
+      console.log('OraAI: Transcript bar', transcriptEnabled ? 'ON' : 'OFF');
+    }
+  });
+
+  function showTranscript(text, type) {
+    if (!transcriptEnabled) return;
+    transcriptBar.innerHTML = type === 'listening'
+      ? `<div class="label">Listening...</div>${text || ''}`
+      : text;
+    transcriptBar.className = type === 'listening' ? 'visible listening' : 'visible';
+  }
+
+  function hideTranscript() {
+    transcriptBar.className = '';
+    setTimeout(() => { transcriptBar.innerHTML = ''; }, 300);
+  }
+
+  // --- Wire up state changes ---
   stateMachine.onTransition((newState, oldState) => {
     console.log(`OraAI: ${oldState} → ${newState}`);
     orb.setState(newState);
+
+    if (newState === OrbState.LISTENING) {
+      showTranscript('', 'listening');
+    } else if (newState === OrbState.IDLE) {
+      hideTranscript();
+    }
   });
 
   // --- Mouse tracking ---
-  // Window starts at (0, windowY) on screen. Subtract windowY to get canvas coords.
   const screenInfo = await window.oraAPI.getScreenInfo();
   const windowY = screenInfo.windowY || 0;
-  console.log(`OraAI: Window Y offset: ${windowY}px (menu bar height)`);
+  console.log(`OraAI: Window Y offset: ${windowY}px`);
   window.oraAPI.onMouseMove((point) => {
     orb.setMousePosition(point.x, point.y - windowY);
   });
 
-  // --- Audio level → orb visualization ---
+  // --- Audio level → orb ---
   recorder.onAudioLevel = (level) => {
     orb.setAudioLevel(level);
   };
@@ -68,12 +98,10 @@
         stateMachine.transition(OrbState.IDLE);
         return;
       }
-
       stateMachine.transition(OrbState.LISTENING);
       silenceTriggered = false;
       recorder.start();
     }
-
     if (action === 'stop') {
       if (stateMachine.state === OrbState.LISTENING) {
         processQuery();
@@ -86,6 +114,7 @@
     try {
       // 1. Stop recording
       stateMachine.transition(OrbState.THINKING);
+      showTranscript('Processing...', 'thinking');
       const audioBlob = await recorder.stop();
 
       if (!audioBlob || audioBlob.size < 1000) {
@@ -94,8 +123,8 @@
         return;
       }
 
-      // 2. Transcribe + screenshot + accessibility elements — all in parallel
-      console.log('OraAI: Transcribing + capturing screen + reading UI elements...');
+      // 2. Transcribe + screenshot + AX elements in parallel
+      console.log('OraAI: Transcribing + capturing screen + reading UI...');
       const [transcript, screenshot, axElements] = await Promise.all([
         sttService.transcribe(audioBlob),
         screenCapture.capture(),
@@ -112,6 +141,9 @@
         return;
       }
 
+      // Show transcript immediately so user knows they were heard
+      showTranscript(`"${transcript}"`, 'heard');
+
       // 3. Send to Vision AI
       console.log('OraAI: Sending to AI...');
       const aiResponse = await visionService.analyze(
@@ -126,13 +158,14 @@
 
       // 4. Respond based on type
       if (aiResponse.type === 'speak') {
-        // General question — just speak the answer, orb stays with cursor
         console.log('OraAI: Speaking answer (no guide)');
+        hideTranscript();
         try {
           await ttsService.speak(aiResponse.answer || aiResponse.summary || 'I don\'t have an answer for that.');
         } catch {}
       } else {
         // Screen guidance — move orb to targets
+        hideTranscript();
         stateMachine.transition(OrbState.GUIDING);
         await guideCtrl.runGuide(aiResponse, {
           width: screenshot?.width || window.innerWidth,
@@ -145,6 +178,7 @@
 
     } catch (error) {
       console.error('OraAI: Pipeline error:', error);
+      hideTranscript();
       try {
         await ttsService.speak('Sorry, something went wrong. Please try again.');
       } catch {}

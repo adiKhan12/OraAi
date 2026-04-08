@@ -31,6 +31,7 @@ let overlayWindow = null;
 let tray = null;
 let mouseInterval = null;
 let isListening = false;
+let showTranscript = true;
 
 // ============================================================
 //  APP STARTUP
@@ -136,13 +137,28 @@ function createTray() {
   const icon = nativeImage.createFromBuffer(buf, { width: size, height: size, scaleFactor: 1.0 });
   tray = new Tray(icon);
   tray.setToolTip('OraAI');
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'OraAI v1.0', enabled: false },
-    { type: 'separator' },
-    { label: 'Option+Space to talk', enabled: false },
-    { type: 'separator' },
-    { label: 'Quit OraAI', click: () => app.quit() },
-  ]));
+
+  function rebuildTrayMenu() {
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'OraAI v1.1', enabled: false },
+      { type: 'separator' },
+      { label: 'Option+Space to talk', enabled: false },
+      { type: 'separator' },
+      {
+        label: 'Show Transcript',
+        type: 'checkbox',
+        checked: showTranscript,
+        click: (item) => {
+          showTranscript = item.checked;
+          overlayWindow?.webContents.send('setting-changed', { showTranscript });
+        },
+      },
+      { type: 'separator' },
+      { label: 'Quit OraAI', click: () => app.quit() },
+    ]));
+  }
+
+  rebuildTrayMenu();
 }
 
 // ============================================================
