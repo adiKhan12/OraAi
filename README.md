@@ -108,7 +108,9 @@ With Accessibility enabled, OraAI reads every button, text field, and menu direc
 
 ## Limitations
 
-- Apps with poor accessibility support (like Spotify) use AI vision for coordinates, which may be slightly off
+- **Windows**: uses vision-only mode (no Accessibility API yet) — coordinates may be slightly off, especially on ultrawide/high-resolution displays
+- **Ultrawide monitors** (3440x1440+): the large downscale ratio can amplify coordinate errors in vision mode
+- Apps with poor accessibility support (like Spotify on macOS) fall back to vision mode
 - Needs API keys for OpenRouter and ElevenLabs
 
 ## Inspiration
