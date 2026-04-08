@@ -71,28 +71,21 @@ npm run build
 
 ## Permissions
 
-OraAI needs three macOS permissions. **Set these up before your first use:**
+### Required
+- **Microphone** — macOS prompts automatically on first launch. Click Allow.
+- **Screen sharing** — OraAI shows a screen picker on first launch. Select your screen and click Share.
 
-### 1. Microphone
-macOS will prompt you automatically on first launch. Click **Allow**.
+### First launch (Gatekeeper)
+macOS may block OraAI because it's unsigned. Go to **System Settings → Privacy & Security**, scroll down, click **"Open Anyway"**.
 
-### 2. Screen Recording
-On first launch, OraAI will show a screen sharing picker — select your screen and click **Share**.
-
-### 3. Accessibility (important)
-This is required for pixel-perfect guidance. Without it, OraAI can't read UI elements on screen.
+### Optional: Accessibility (pixel-perfect mode)
+OraAI works out of the box using AI vision to locate UI elements. But if you want **pixel-perfect** accuracy, enable Accessibility:
 
 1. Go to **System Settings → Privacy & Security → Accessibility**
-2. Click **"+"** and add `OraAI.app` (from your Applications folder or wherever you placed it)
-3. Make sure the toggle is **ON**
+2. Click **"+"** and add `OraAI.app`
+3. Toggle it **ON**
 
-If OraAI shows as blocked, remove it from the list, re-add it, and toggle ON again.
-
-### Gatekeeper (first launch only)
-macOS may block OraAI because it's not signed with an Apple Developer certificate. If you see "Apple could not verify":
-1. Go to **System Settings → Privacy & Security**
-2. Scroll down — you'll see "OraAI was blocked"
-3. Click **"Open Anyway"**
+With Accessibility enabled, OraAI reads every button, text field, and menu directly from macOS — no coordinate guessing. Without it, OraAI uses Claude's vision to estimate positions, which works well but may be slightly off on some elements.
 
 ## Tech stack
 

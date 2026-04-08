@@ -1,7 +1,7 @@
 // OpenRouter Vision AI Service
 // Two modes:
-//   1. Accessibility mode (pixel-perfect) — when OS provides rich element data
-//   2. Vision fallback (Clicky-style) — downscaled screenshot + coordinate extraction
+//   1. Vision mode (default) — Claude Sonnet + downscaled screenshot, works with any app
+//   2. Accessibility mode (optional, pixel-perfect) — when macOS Accessibility permission is granted
 
 const AX_THRESHOLD = 15; // Below this = poor accessibility, use vision fallback
 const FALLBACK_MAX_DIM = 1280; // Downscale screenshots to this max dimension for better AI accuracy
@@ -86,56 +86,92 @@ Rules:
   // ──────────────────────────────────────────────
 
   async analyzeWithVisionFallback(screenshotBase64, question, origWidth, origHeight) {
-    // Downscale screenshot to 1280px max dimension for better AI coordinate accuracy
+    // Clicky-style: downscale to 1280px max, use Claude, inline [POINT:x,y:label] format
     const { base64: scaledBase64, width: scaledW, height: scaledH } =
       await this.downscaleScreenshot(screenshotBase64, origWidth, origHeight, FALLBACK_MAX_DIM);
 
-    console.log(`OraAI: Vision fallback — downscaled ${origWidth}x${origHeight} → ${scaledW}x${scaledH}`);
+    const scaleX = origWidth / scaledW;
+    const scaleY = origHeight / scaledH;
 
-    // Store scale factors for converting AI coords back to screen space
-    this.lastScaleX = origWidth / scaledW;
-    this.lastScaleY = origHeight / scaledH;
+    console.log(`OraAI: Vision fallback — ${origWidth}x${origHeight} → ${scaledW}x${scaledH} (scale ${scaleX.toFixed(2)}x)`);
 
-    const systemPrompt = `You are OraAI, a friendly and knowledgeable screen tutor. You can see the user's screen.
+    // Clicky-style system prompt: natural text response with [POINT:x,y:label] at the end
+    const systemPrompt = `You are OraAI, a friendly screen tutor that helps users navigate applications on their Mac.
 
-The screenshot you're looking at is ${scaledW}x${scaledH} pixels.
+You will receive a screenshot of the user's current screen. The user will ask you a question about what they see.
 
-DECIDE the response type:
-- If the user asks about something ON SCREEN → type: "guide"
-- If the user asks a GENERAL question → type: "speak"
+If the question is about the screen (where to click, how to do something in the app):
+- Give a natural, helpful spoken response explaining what to do
+- At the END of your response, include a [POINT:x,y:label] tag marking exactly where the user should look or click
+- The coordinates x,y are pixel positions in the screenshot image
+- Only include ONE point per response — the most important next action
 
-For "guide" responses, you MUST identify the exact pixel coordinates of each UI element to interact with. Return coordinates as [POINT:x,y] tags within each instruction.
+If the question is general knowledge (not about the screen):
+- Just give a normal helpful answer, no [POINT] tag needed
 
-Format:
-{"type":"guide","steps":[{"instruction":"Let's click the search bar here to start searching [POINT:640,280]","action":"click","delay_after":2}]}
+COORDINATE RULES:
+- The screenshot is exactly ${scaledW} pixels wide and ${scaledH} pixels tall
+- (0,0) is top-left, (${scaledW},${scaledH}) is bottom-right
+- Look VERY carefully at the actual position of UI elements before giving coordinates
+- Target the exact CENTER of buttons, text fields, icons — not the edge
+- x=${Math.round(scaledW/2)} is the horizontal middle of the screen
 
-For "speak" responses:
-{"type":"speak","answer":"Your conversational answer here"}
+Example response for a screen question:
+"To search for something, you'll want to click on the search bar at the top of the page. Just click right here and start typing what you're looking for. [POINT:${Math.round(scaledW/2)},85:search bar]"
 
-COORDINATE ACCURACY — this is critical:
-- The image is exactly ${scaledW} pixels wide and ${scaledH} pixels tall
-- (0,0) is the top-left corner, (${scaledW},${scaledH}) is the bottom-right
-- Horizontal center is x=${Math.round(scaledW / 2)}
-- Look carefully at where each UI element actually is before estimating coordinates
-- Target the CENTER of the element, not the edge
-- Double-check your coordinates by comparing to nearby reference points
+Example response for a general question:
+"JavaScript is a programming language used for web development. It runs in browsers and can also be used on servers with Node.js."`;
 
-INSTRUCTION QUALITY:
-- Speak like a friendly tutor, not a robot
-- Each instruction should be a natural sentence that includes the [POINT:x,y] tag
-- Explain what will happen after each action
-- For multi-step tasks, connect steps logically
-- Adapt your language to whatever app is on screen
+    // Use Claude Sonnet for the fallback — better at coordinate estimation than GPT-4o
+    const fallbackModel = 'anthropic/claude-sonnet-4';
 
-Rules:
-- Every guide step MUST include a [POINT:x,y] tag with pixel coordinates
-- Actions: click, type, scroll, look
-- Max 8 steps
-- Respond ONLY with JSON`;
+    const userMessage = {
+      role: 'user',
+      content: [
+        { type: 'text', text: `(image dimensions: ${scaledW}x${scaledH} pixels)\n\n${question}` },
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${scaledBase64}` } },
+      ],
+    };
 
-    return this.callAPI(systemPrompt, scaledBase64, question, (content) => {
-      return this.parseVisionFallbackResponse(content, this.lastScaleX, this.lastScaleY);
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...this.conversationHistory,
+      userMessage,
+    ];
+
+    const response = await fetch(this.endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://oraai.app',
+        'X-Title': 'OraAI',
+      },
+      body: JSON.stringify({
+        model: fallbackModel,
+        messages,
+        max_tokens: 1024,
+        temperature: 0.3,
+      }),
     });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Vision fallback failed (${response.status}): ${error}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+
+    // Save to history
+    this.conversationHistory.push({ role: 'user', content: question });
+    this.conversationHistory.push({ role: 'assistant', content });
+    while (this.conversationHistory.length > this.maxHistory * 2) {
+      this.conversationHistory.shift();
+    }
+
+    // Parse the [POINT:x,y:label] from the response
+    return this.parseClickyResponse(content, scaleX, scaleY);
   }
 
   // ──────────────────────────────────────────────
@@ -230,49 +266,48 @@ Rules:
   }
 
   // ──────────────────────────────────────────────
-  //  Parse: Vision fallback (extract [POINT:x,y])
+  //  Parse: Clicky-style [POINT:x,y:label] from natural text
   // ──────────────────────────────────────────────
 
-  parseVisionFallbackResponse(content, scaleX, scaleY) {
-    let parsed = this.extractJSON(content);
+  parseClickyResponse(content, scaleX, scaleY) {
+    // Extract [POINT:x,y:label] or [POINT:x,y] from the response
+    const pointMatch = content.match(/\[POINT:(\d+),(\d+)(?::([^\]]*))?\]/);
 
-    if (!parsed?.steps && parsed?.type !== 'speak') {
-      return { type: 'speak', answer: content.substring(0, 300) };
-    }
+    if (pointMatch) {
+      const imgX = parseInt(pointMatch[1]);
+      const imgY = parseInt(pointMatch[2]);
+      const label = pointMatch[3] || 'target';
 
-    if (parsed.type === 'speak') return parsed;
+      // Scale from downscaled image coords to full screen coords
+      // Clamp to image bounds first
+      const clampedX = Math.max(0, Math.min(imgX, Math.round(1280))); // max dim
+      const clampedY = Math.max(0, Math.min(imgY, Math.round(1280)));
+      const screenX = Math.round(clampedX * scaleX);
+      const screenY = Math.round(clampedY * scaleY);
 
-    parsed.steps = (parsed.steps || []).map((step) => {
-      const instruction = step.instruction || '';
+      console.log(`OraAI: Clicky fallback — [POINT:${imgX},${imgY}:${label}] → screen(${screenX},${screenY}) [scale ${scaleX.toFixed(2)}x${scaleY.toFixed(2)}]`);
 
-      // Extract [POINT:x,y] from instruction text
-      const pointMatch = instruction.match(/\[POINT:(\d+),(\d+)\]/);
-      let x, y;
-
-      if (pointMatch) {
-        // Scale from downscaled image coords back to screen coords
-        x = Math.round(parseInt(pointMatch[1]) * scaleX);
-        y = Math.round(parseInt(pointMatch[2]) * scaleY);
-        console.log(`OraAI: Vision fallback — [POINT:${pointMatch[1]},${pointMatch[2]}] → screen(${x},${y}) [scale ${scaleX.toFixed(2)}x${scaleY.toFixed(2)}]`);
-      } else {
-        // Try raw x,y from JSON
-        x = step.x ? Math.round(step.x * scaleX) : 960;
-        y = step.y ? Math.round(step.y * scaleY) : 600;
-        console.log(`OraAI: Vision fallback — raw coords (${step.x},${step.y}) → screen(${x},${y})`);
-      }
-
-      // Clean the [POINT:...] tag from the spoken instruction
-      const cleanInstruction = instruction.replace(/\s*\[POINT:\d+,\d+\]\s*/g, '').trim();
+      // Clean the [POINT:...] tag from spoken text
+      const spokenText = content.replace(/\s*\[POINT:\d+,\d+(?::[^\]]*)?\]\s*/g, '').trim();
 
       return {
-        instruction: cleanInstruction || 'Look here',
-        x, y,
-        action: step.action || 'look',
-        delay_after: step.delay_after || 2,
+        type: 'guide',
+        steps: [{
+          instruction: spokenText,
+          x: screenX,
+          y: screenY,
+          action: 'click',
+          delay_after: 2,
+        }],
       };
-    });
+    }
 
-    return parsed;
+    // No [POINT] found — this is a speak-only response
+    console.log('OraAI: Clicky fallback — no POINT found, speak-only response');
+    return {
+      type: 'speak',
+      answer: content,
+    };
   }
 
   // ──────────────────────────────────────────────

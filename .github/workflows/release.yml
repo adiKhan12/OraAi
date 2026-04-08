@@ -71,10 +71,13 @@ jobs:
             Get keys from [OpenRouter](https://openrouter.ai) and [ElevenLabs](https://elevenlabs.io)
 
             ### Before first launch
-            3. **Gatekeeper**: macOS may block OraAI — go to System Settings → Privacy & Security, scroll down, click "Open Anyway"
-            4. **Accessibility**: Go to System Settings → Privacy & Security → Accessibility → click "+" → add OraAI.app → toggle ON. This is required for pixel-perfect guidance.
-            5. **Microphone**: macOS will prompt on first launch — click Allow
-            6. **Screen sharing**: OraAI will show a screen picker on first launch — select your screen and click Share
+            3. **Gatekeeper**: macOS may block it — go to System Settings → Privacy & Security, scroll down, click "Open Anyway"
+            4. **Microphone**: macOS will prompt on first launch — click Allow
+            5. **Screen sharing**: Select your screen and click Share when prompted
+
+            ### Optional: Pixel-perfect mode
+            For even better accuracy, enable **Accessibility** permission:
+            System Settings → Privacy & Security → Accessibility → add OraAI.app → toggle ON
 
             ### Use
             **Option+Space** to talk. Ask about anything on your screen.
