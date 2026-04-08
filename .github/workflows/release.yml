@@ -69,7 +69,14 @@ jobs:
             ELEVENLABS_API_KEY=your-key-here
             ```
             Get keys from [OpenRouter](https://openrouter.ai) and [ElevenLabs](https://elevenlabs.io)
-            3. Open OraAI — grant Microphone, Screen Recording, and Accessibility when prompted
-            4. **Option+Space** to talk
+
+            ### Before first launch
+            3. **Gatekeeper**: macOS may block OraAI — go to System Settings → Privacy & Security, scroll down, click "Open Anyway"
+            4. **Accessibility**: Go to System Settings → Privacy & Security → Accessibility → click "+" → add OraAI.app → toggle ON. This is required for pixel-perfect guidance.
+            5. **Microphone**: macOS will prompt on first launch — click Allow
+            6. **Screen sharing**: OraAI will show a screen picker on first launch — select your screen and click Share
+
+            ### Use
+            **Option+Space** to talk. Ask about anything on your screen.
 
             To uninstall, drag OraAI.app to Trash and `rm -rf ~/.oraai`
