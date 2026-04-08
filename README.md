@@ -1,6 +1,6 @@
 # OraAI
 
-A floating AI screen companion for macOS. It follows your cursor, listens to your voice, sees your screen, and then moves to show you exactly what to click.
+A floating AI screen companion for macOS and Windows. It follows your cursor, listens to your voice, sees your screen, and then moves to show you exactly what to click.
 
 <p align="center">
   <img src="assets/demo.gif" alt="OraAI Demo" width="720">
@@ -8,19 +8,16 @@ A floating AI screen companion for macOS. It follows your cursor, listens to you
 
 ## What it does
 
-You hold Option+Space and ask something like "how do I add text to this video?" — OraAI takes a screenshot, reads every UI element on screen using the macOS Accessibility API, sends it all to a vision model, and then the orb detaches from your cursor and floats to the exact button you need to press. It talks you through each step.
+You hold Alt+Space and ask something like "how do I add text to this video?" — OraAI takes a screenshot, sends it to a vision AI, and then the orb detaches from your cursor and floats to the exact button you need to press. It talks you through each step.
 
 It works in any app. Firefox, CapCut, Calendar, VS Code, Blender — whatever you have open.
 
 ## How it works
 
-The key insight is separating **localization** from **reasoning**:
+OraAI has two modes:
 
-- The macOS Accessibility API gives pixel-perfect positions of every button, text field, and menu item on screen
-- A vision AI (GPT-4o via OpenRouter) looks at the screenshot + element list and decides *which* element to point to
-- The orb animates to those coordinates while ElevenLabs TTS speaks the instruction
-
-This gives way better accuracy than asking an AI model to guess pixel coordinates from a screenshot (which I tried first — it doesn't work).
+- **Vision mode** (all platforms) — screenshots your screen, downscales to 1280px, sends to Claude Sonnet which returns exact coordinates. Works with any app on any platform.
+- **Pixel-perfect mode** (macOS only, optional) — uses the macOS Accessibility API to read every button, text field, and menu item with exact positions. The AI just picks *which* element to click. Zero coordinate guessing.
 
 ## The orb states
 
@@ -29,21 +26,43 @@ This gives way better accuracy than asking an AI model to guess pixel coordinate
 - **Thinking** — color-cycling spinner (transcribing + screenshotting + querying AI)
 - **Guiding** — bright purple/gold, detaches from cursor, moves to targets with particle trail
 
-## Quick install (download release)
+## Quick install
 
-1. Download the latest `.zip` from [Releases](https://github.com/adiKhan12/OraAi/releases)
-2. Unzip and drag `OraAI.app` to your Applications folder
-3. Add your API keys — open Terminal and run:
+Download the latest zip for your platform from [Releases](https://github.com/adiKhan12/OraAi/releases).
+
+### macOS
+1. Unzip and drag `OraAI.app` to Applications
+2. Add your API keys — open Terminal and run:
    ```bash
    mkdir -p ~/.oraai
-   cat > ~/.oraai/.env << 'EOF'
+   nano ~/.oraai/.env
+   ```
+   Paste and save:
+   ```
    OPENROUTER_API_KEY=your-key-here
    ELEVENLABS_API_KEY=your-key-here
-   EOF
    ```
-   Get keys from [OpenRouter](https://openrouter.ai) and [ElevenLabs](https://elevenlabs.io)
-4. Open OraAI and grant permissions when prompted
-5. **Option+Space** to talk
+3. First launch: macOS may block it — go to **System Settings → Privacy & Security**, click **"Open Anyway"**
+4. Grant Microphone and Screen sharing when prompted
+5. **Alt+Space** to talk
+
+### Windows
+1. Unzip the folder anywhere
+2. Create the config folder and `.env` file — open Command Prompt and run:
+   ```
+   mkdir %USERPROFILE%\.oraai
+   notepad %USERPROFILE%\.oraai\.env
+   ```
+   Paste and save:
+   ```
+   OPENROUTER_API_KEY=your-key-here
+   ELEVENLABS_API_KEY=your-key-here
+   ```
+3. Run `OraAI.exe`
+4. Grant Microphone when prompted, share your screen
+5. **Alt+Space** to talk
+
+Get API keys from [OpenRouter](https://openrouter.ai) and [ElevenLabs](https://elevenlabs.io).
 
 ## Build from source
 
@@ -56,48 +75,29 @@ npm install
 Add your API keys:
 ```bash
 mkdir -p ~/.oraai
-cat > ~/.oraai/.env << 'EOF'
-OPENROUTER_API_KEY=your-key-here
-ELEVENLABS_API_KEY=your-key-here
-EOF
+nano ~/.oraai/.env
 ```
 
-Compile the accessibility helper and run:
+Run in dev mode:
 ```bash
-swiftc -O -o helpers/ax-elements helpers/ax-elements.swift -framework Cocoa
 npm start
 ```
 
-Build the `.app` bundle:
+Build for macOS (includes pixel-perfect accessibility helper):
 ```bash
+swiftc -O -o helpers/ax-elements helpers/ax-elements.swift -framework Cocoa
 npm run build
 ```
 
-## Permissions
+## Optional: Pixel-perfect mode (macOS only)
 
-### Required
-- **Microphone** — macOS prompts automatically on first launch. Click Allow.
-- **Screen sharing** — OraAI shows a screen picker on first launch. Select your screen and click Share.
+OraAI works out of the box using AI vision. For pixel-perfect accuracy on macOS, enable Accessibility:
 
-### First launch (Gatekeeper)
-macOS may block OraAI because it's unsigned. Go to **System Settings → Privacy & Security**, scroll down, click **"Open Anyway"**.
-
-### Optional: Accessibility (pixel-perfect mode)
-OraAI works out of the box using AI vision to locate UI elements. But if you want **pixel-perfect** accuracy, enable Accessibility:
-
-1. Go to **System Settings → Privacy & Security → Accessibility**
+1. **System Settings → Privacy & Security → Accessibility**
 2. Click **"+"** and add `OraAI.app`
 3. Toggle it **ON**
 
-With Accessibility enabled, OraAI reads every button, text field, and menu directly from macOS — no coordinate guessing. Without it, OraAI uses Claude's vision to estimate positions, which works well but may be slightly off on some elements.
-
-## Tech stack
-
-- Electron (transparent overlay window)
-- HTML Canvas (orb rendering + animations)
-- macOS Accessibility API via Swift helper (pixel-perfect element detection)
-- OpenRouter / GPT-4o (vision + reasoning)
-- ElevenLabs (speech-to-text + text-to-speech)
+This lets OraAI read every UI element directly from macOS — no coordinate guessing.
 
 ## Platform support
 
@@ -106,14 +106,23 @@ With Accessibility enabled, OraAI reads every button, text field, and menu direc
 | **macOS** | Works out of the box | Enable Accessibility permission |
 | **Windows** | Works out of the box | Coming soon |
 
+## Tech stack
+
+- Electron (transparent overlay window)
+- HTML Canvas (orb rendering + animations)
+- Claude Sonnet via OpenRouter (vision + coordinate extraction)
+- macOS Accessibility API via Swift helper (optional pixel-perfect mode)
+- ElevenLabs (speech-to-text + text-to-speech)
+
 ## Limitations
 
-- Apps with poor accessibility support (like Spotify) use AI vision for coordinates, which may be slightly off
+- Ultrawide monitors (3440x1440+) may have less accurate coordinates in vision mode
+- Apps with poor accessibility support (like Spotify) use vision mode which may be slightly off
 - Needs API keys for OpenRouter and ElevenLabs
 
 ## Inspiration
 
-Inspired by [Clicky by Farza Majeed](https://www.linkedin.com/posts/farza-majeed-76685612a_i-built-this-thing-called-clicky-its-an-activity-7447137675658244096-Ac9B/) — I saw the concept and wanted to build my own version with a different approach (macOS Accessibility API for pixel-perfect accuracy).
+Inspired by [Clicky by Farza Majeed](https://www.linkedin.com/posts/farza-majeed-76685612a_i-built-this-thing-called-clicky-its-an-activity-7447137675658244096-Ac9B/) — I saw the concept and wanted to build my own version with a different approach.
 
 ## License
 
