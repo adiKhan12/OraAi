@@ -16,13 +16,11 @@ class GuideController {
     this.aborted = false;
     this.clearTooltips();
 
-    // Window starts at y=31 (below menu bar). Canvas y=0 = screen y=31.
-    // Screenshot covers full screen (y=0 to y=1200).
-    // AI pixel coords are in screenshot space.
-    // To map to canvas: subtract window Y offset (31px).
+    // Coordinates from AI are in screen space (same as screenshot space).
+    // Canvas starts at (0, windowY) on screen. Subtract windowY for canvas Y.
     const screenInfo = await window.oraAPI.getScreenInfo();
-    const winOffsetY = 31; // Menu bar height — from debug: winBounds.y=31
-    console.log(`OraAI Guide: screenshot ${screenshotInfo.width}x${screenshotInfo.height}, canvas ${window.innerWidth}x${window.innerHeight}, winY=${winOffsetY}`);
+    const windowY = screenInfo.windowY || 0;
+    console.log(`OraAI Guide: screenshot ${screenshotInfo.width}x${screenshotInfo.height}, canvas ${window.innerWidth}x${window.innerHeight}, windowY=${windowY}`);
 
     // Process each step (no pre-speech — go straight to guiding)
     for (let i = 0; i < response.steps.length; i++) {
@@ -30,11 +28,11 @@ class GuideController {
 
       const step = response.steps[i];
 
-      // Map screenshot coords → canvas coords (subtract window Y offset)
+      // Screen coords → canvas coords (subtract window Y offset)
       const screenX = step.x;
-      const screenY = step.y - winOffsetY;
+      const screenY = step.y - windowY;
 
-      console.log(`OraAI Guide step ${i + 1}: AI(${step.x},${step.y}) → canvas(${screenX},${screenY})`);
+      console.log(`OraAI Guide step ${i + 1}: AI(${step.x},${step.y}) → canvas(${screenX},${screenY}) [winY=${windowY}]`);
 
       // Clear previous step's tooltip and rings
       this.clearTooltips();

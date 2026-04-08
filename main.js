@@ -193,14 +193,11 @@ function startMouseTracking() {
 ipcMain.handle('get-screen-info', () => {
   const d = screen.getPrimaryDisplay();
   const bounds = overlayWindow ? overlayWindow.getBounds() : { x: 0, y: 0 };
-  const contentBounds = overlayWindow ? overlayWindow.getContentBounds() : bounds;
   return {
     width: d.size.width,
     height: d.size.height,
     scaleFactor: d.scaleFactor,
-    // The Y offset where the content area starts (menu bar / notch)
-    contentOffsetY: contentBounds.y - bounds.y,
-    contentHeight: contentBounds.height,
+    windowY: bounds.y, // Where the window starts on screen (menu bar height)
   };
 });
 

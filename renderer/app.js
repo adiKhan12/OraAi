@@ -38,12 +38,12 @@
   });
 
   // --- Mouse tracking ---
-  // Window is at y=31 (below menu bar). Canvas y=0 = screen y=31.
-  // Mouse coords are screen coords, so subtract window Y to get canvas coords.
+  // Window starts at (0, windowY) on screen. Subtract windowY to get canvas coords.
   const screenInfo = await window.oraAPI.getScreenInfo();
-  const winY = 31; // From debug: winBounds.y=31
+  const windowY = screenInfo.windowY || 0;
+  console.log(`OraAI: Window Y offset: ${windowY}px (menu bar height)`);
   window.oraAPI.onMouseMove((point) => {
-    orb.setMousePosition(point.x, point.y - winY);
+    orb.setMousePosition(point.x, point.y - windowY);
   });
 
   // --- Audio level → orb visualization ---
