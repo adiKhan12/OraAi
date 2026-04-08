@@ -2,6 +2,10 @@
 
 A floating AI screen companion for macOS. It follows your cursor, listens to your voice, sees your screen, and then moves to show you exactly what to click.
 
+<p align="center">
+  <img src="assets/demo.gif" alt="OraAI Demo" width="720">
+</p>
+
 ## What it does
 
 You hold Option+Space and ask something like "how do I add text to this video?" — OraAI takes a screenshot, reads every UI element on screen using the macOS Accessibility API, sends it all to a vision model, and then the orb detaches from your cursor and floats to the exact button you need to press. It talks you through each step.
