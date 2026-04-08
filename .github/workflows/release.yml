@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install packager
+        run: npm install --save-dev @electron/packager
+
+      - name: Compile accessibility helper
+        run: swiftc -O -o helpers/ax-elements helpers/ax-elements.swift -framework Cocoa
+
+      - name: Package app
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          npx @electron/packager . OraAI \
+            --platform=darwin \
+            --arch=arm64 \
+            --overwrite \
+            --app-bundle-id=com.oraai.app \
+            --app-version="${VERSION}" \
+            --extend-info=Info.plist \
+            --extra-resource=helpers/ax-elements
+
+      - name: Sign app
+        run: codesign --force --deep --sign - OraAI-darwin-arm64/OraAI.app
+
+      - name: Create zip
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          cd OraAI-darwin-arm64
+          zip -r -y "../OraAI-v${VERSION}-mac-arm64.zip" OraAI.app
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: OraAI-v*-mac-arm64.zip
+          generate_release_notes: true
+          body: |
+            ## OraAI ${{ github.ref_name }}
+
+            ### Install
+            1. Download `OraAI-v*-mac-arm64.zip` below
+            2. Unzip and drag `OraAI.app` to your Applications folder
+            3. Create a `.env` file in your home directory or next to the app:
+               ```
+               OPENROUTER_API_KEY=your-key
+               ELEVENLABS_API_KEY=your-key
+               ```
+            4. Open OraAI — grant Microphone, Screen Recording, and Accessibility permissions
+            5. Press **Option+Space** to talk
+
+            ### Uninstall
+            Drag OraAI.app from Applications to Trash.

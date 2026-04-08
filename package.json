@@ -4,7 +4,10 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "npx @electron/packager . OraAI --platform=darwin --arch=arm64 --overwrite --app-bundle-id=com.oraai.app --app-version=1.0.0 --extra-resource=.env"
+    "build": "bash scripts/build.sh",
+    "release:patch": "npm version patch && git push && git push --tags",
+    "release:minor": "npm version minor && git push && git push --tags",
+    "release:major": "npm version major && git push && git push --tags"
   },
   "author": "Adnan Khan",
   "license": "CC-BY-NC-4.0",

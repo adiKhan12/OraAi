@@ -3,5 +3,7 @@ node_modules/
 dist/
 .DS_Store
 OraAI-darwin-arm64/
+OraAI-v*.zip
 helpers/ax-elements
 .claude/
+linkedin-post.md
