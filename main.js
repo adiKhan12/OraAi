@@ -37,17 +37,22 @@ let showTranscript = true;
 //  APP STARTUP
 // ============================================================
 
-app.whenReady().then(async () => {
-  try { app.dock?.hide(); } catch {}
+const isMac = process.platform === 'darwin';
+const isWin = process.platform === 'win32';
 
-  // Request microphone
-  try {
-    const micStatus = systemPreferences.getMediaAccessStatus('microphone');
-    if (micStatus === 'not-determined') {
-      await systemPreferences.askForMediaAccess('microphone');
-    }
-    console.log('OraAI: Mic:', systemPreferences.getMediaAccessStatus('microphone'));
-  } catch {}
+app.whenReady().then(async () => {
+  if (isMac) try { app.dock?.hide(); } catch {}
+
+  // Request microphone (macOS only — Windows grants via system prompt)
+  if (isMac) {
+    try {
+      const micStatus = systemPreferences.getMediaAccessStatus('microphone');
+      if (micStatus === 'not-determined') {
+        await systemPreferences.askForMediaAccess('microphone');
+      }
+      console.log('OraAI: Mic:', systemPreferences.getMediaAccessStatus('microphone'));
+    } catch {}
+  }
 
   createOverlayWindow();
 
@@ -221,8 +226,9 @@ ipcMain.handle('get-screen-info', () => {
 //  ACCESSIBILITY: get UI elements with pixel-perfect positions
 // ============================================================
 
-// Find the PID of the frontmost non-OraAI app
+// Find the PID of the frontmost non-OraAI app (macOS only)
 function getFrontAppPid() {
+  if (!isMac) return null; // Windows: no AX helper, use vision fallback
   const { execSync } = require('child_process');
   const skipNames = ['electron', 'oraai'];
   try {

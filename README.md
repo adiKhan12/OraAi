@@ -99,10 +99,16 @@ With Accessibility enabled, OraAI reads every button, text field, and menu direc
 - OpenRouter / GPT-4o (vision + reasoning)
 - ElevenLabs (speech-to-text + text-to-speech)
 
+## Platform support
+
+| Platform | Vision mode | Pixel-perfect mode |
+|----------|------------|-------------------|
+| **macOS** | Works out of the box | Enable Accessibility permission |
+| **Windows** | Works out of the box | Coming soon |
+
 ## Limitations
 
-- Apps with poor accessibility support (like Spotify) fall back to AI coordinate estimation, which is less accurate
-- macOS only for now (the Accessibility API is platform-specific)
+- Apps with poor accessibility support (like Spotify) use AI vision for coordinates, which may be slightly off
 - Needs API keys for OpenRouter and ElevenLabs
 
 ## Inspiration

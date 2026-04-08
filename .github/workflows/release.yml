@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  build:
+  build-mac:
     runs-on: macos-latest
     permissions:
       contents: write
@@ -19,10 +19,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install
-
-      - name: Install packager
-        run: npm install --save-dev @electron/packager
+        run: npm install && npm install --save-dev @electron/packager
 
       - name: Compile accessibility helper
         run: swiftc -O -o helpers/ax-elements helpers/ax-elements.swift -framework Cocoa
@@ -39,47 +36,91 @@ jobs:
             --extend-info=Info.plist \
             --extra-resource=helpers/ax-elements
 
-      - name: Sign app
-        run: codesign --force --deep --sign - OraAI-darwin-arm64/OraAI.app
-
-      - name: Create zip
+      - name: Sign and zip
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          cd OraAI-darwin-arm64
-          zip -r -y "../OraAI-v${VERSION}-mac-arm64.zip" OraAI.app
+          codesign --force --deep --sign - OraAI-darwin-arm64/OraAI.app
+          cd OraAI-darwin-arm64 && zip -r -y "../OraAI-v${VERSION}-mac-arm64.zip" OraAI.app
+
+      - name: Upload Mac artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-build
+          path: OraAI-v*-mac-arm64.zip
+
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install && npm install --save-dev @electron/packager
+
+      - name: Package app
+        shell: bash
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          npx @electron/packager . OraAI \
+            --platform=win32 \
+            --arch=x64 \
+            --overwrite \
+            --app-version="${VERSION}"
+
+      - name: Create zip
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          Compress-Archive -Path "OraAI-win32-x64\*" -DestinationPath "OraAI-v${version}-win-x64.zip"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-build
+          path: OraAI-v*-win-x64.zip
+
+  release:
+    needs: [build-mac, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: OraAI-v*-mac-arm64.zip
+          files: |
+            mac-build/OraAI-v*-mac-arm64.zip
+            win-build/OraAI-v*-win-x64.zip
           generate_release_notes: true
           body: |
             ## OraAI ${{ github.ref_name }}
 
-            ### Install
-            1. Download the `.zip` below, unzip, drag `OraAI.app` to Applications
-            2. Add your API keys — open Terminal and run:
-            ```
-            mkdir -p ~/.oraai
-            nano ~/.oraai/.env
-            ```
-            Paste this and save:
+            ### macOS
+            1. Download `OraAI-v*-mac-arm64.zip`, unzip, drag to Applications
+            2. Add API keys: `mkdir -p ~/.oraai && nano ~/.oraai/.env`
+            3. Gatekeeper may block it — System Settings → Privacy & Security → Open Anyway
+            4. Grant Microphone + Screen sharing when prompted
+            5. Optional: enable Accessibility for pixel-perfect mode
+
+            ### Windows
+            1. Download `OraAI-v*-win-x64.zip`, unzip anywhere
+            2. Create `.env` file in the OraAI folder with your API keys:
             ```
             OPENROUTER_API_KEY=your-key-here
             ELEVENLABS_API_KEY=your-key-here
             ```
-            Get keys from [OpenRouter](https://openrouter.ai) and [ElevenLabs](https://elevenlabs.io)
-
-            ### Before first launch
-            3. **Gatekeeper**: macOS may block it — go to System Settings → Privacy & Security, scroll down, click "Open Anyway"
-            4. **Microphone**: macOS will prompt on first launch — click Allow
-            5. **Screen sharing**: Select your screen and click Share when prompted
-
-            ### Optional: Pixel-perfect mode
-            For even better accuracy, enable **Accessibility** permission:
-            System Settings → Privacy & Security → Accessibility → add OraAI.app → toggle ON
+            3. Run `OraAI.exe`
+            4. Grant Microphone when prompted
 
             ### Use
-            **Option+Space** to talk. Ask about anything on your screen.
-
-            To uninstall, drag OraAI.app to Trash and `rm -rf ~/.oraai`
+            **Alt+Space** to talk. Ask about anything on your screen.
