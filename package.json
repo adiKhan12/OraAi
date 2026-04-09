@@ -4,7 +4,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "node node_modules/electronmon/bin/cli.js .",
+    "dev": "electronmon .",
     "build": "bash scripts/build.sh",
     "release:patch": "npm version patch && git push && git push --tags",
     "release:minor": "npm version minor && git push && git push --tags",
