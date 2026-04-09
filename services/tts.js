@@ -10,7 +10,23 @@ class TTSService {
     this.currentSource = null;
   }
 
+  cleanForSpeech(text) {
+    return text
+      .replace(/\[POINT:\d+,\d+(?::[^\]]*)?]/g, '')  // remove [POINT:x,y:label]
+      .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1')        // **bold**, *italic*, ***both***
+      .replace(/`{1,3}[^`]*`{1,3}/g, '')              // `code` and ```blocks```
+      .replace(/^#{1,6}\s+/gm, '')                     // # headings
+      .replace(/^\s*[-*+]\s+/gm, '')                   // - bullet points
+      .replace(/^\s*\d+\.\s+/gm, '')                   // 1. numbered lists
+      .replace(/\[([^\]]+)]\([^)]+\)/g, '$1')          // [link](url) → link
+      .replace(/\n{2,}/g, '. ')                        // paragraph breaks → pause
+      .replace(/\s{2,}/g, ' ')                         // collapse whitespace
+      .trim();
+  }
+
   async speak(text) {
+    text = this.cleanForSpeech(text);
+    if (!text) return;
     const url = `${this.endpoint}/${this.voiceId}`;
 
     const response = await fetch(url, {

@@ -9,26 +9,25 @@ class GuideController {
     this.aborted = false;
   }
 
-  async runGuide(response, screenshotInfo) {
+  async runGuide(response) {
     if (!response?.steps?.length) return;
 
     this.isGuiding = true;
     this.aborted = false;
     this.clearTooltips();
 
-    // Coordinates from AI are in screen space (same as screenshot space).
-    // Canvas starts at (0, windowY) on screen. Subtract windowY for canvas Y.
+    // Coordinates from vision.js are already in screen points.
+    // Only adjustment: subtract windowY to convert to canvas coords.
     const screenInfo = await window.oraAPI.getScreenInfo();
     const windowY = screenInfo.windowY || 0;
-    console.log(`OraAI Guide: screenshot ${screenshotInfo.width}x${screenshotInfo.height}, canvas ${window.innerWidth}x${window.innerHeight}, windowY=${windowY}`);
+    console.log(`OraAI Guide: canvas ${window.innerWidth}x${window.innerHeight}, windowY=${windowY}`);
 
-    // Process each step (no pre-speech — go straight to guiding)
     for (let i = 0; i < response.steps.length; i++) {
       if (this.aborted) break;
 
       const step = response.steps[i];
 
-      // Screen coords → canvas coords (subtract window Y offset)
+      // Screen points → canvas coords (subtract window Y offset)
       const screenX = step.x;
       const screenY = step.y - windowY;
 

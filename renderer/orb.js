@@ -38,6 +38,10 @@ class OrbRenderer {
     // Guide mode: don't follow mouse
     this.followMouse = true;
 
+    // Working area border
+    this.workingArea = { enabled: false, width: 1280, height: 900, showBorder: true, resizing: false };
+    this.lockedRect = null; // Locked position during resize mode
+
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -131,9 +135,52 @@ class OrbRenderer {
     });
   }
 
+  setWorkingArea(wa) {
+    const wasResizing = this.workingArea.resizing;
+    this.workingArea = { ...this.workingArea, ...wa };
+
+    // Lock position when entering resize mode, unlock when leaving
+    if (wa.resizing && !wasResizing) {
+      const rect = this._calcWorkingAreaRect();
+      this.lockedRect = { left: rect.left, top: rect.top };
+    } else if (!wa.resizing && wasResizing) {
+      this.lockedRect = null;
+    }
+  }
+
+  _calcWorkingAreaRect() {
+    const w = this.workingArea.width;
+    const h = this.workingArea.height;
+    const cx = this.followMouse ? this.targetX : this.x;
+    const cy = this.followMouse ? this.targetY : this.y;
+    const screenW = this.canvas.width / this.dpr;
+    const screenH = this.canvas.height / this.dpr;
+    const left = Math.max(0, Math.min(cx - w / 2, screenW - w));
+    const top = Math.max(0, Math.min(cy - h / 2, screenH - h));
+    return { left, top, width: w, height: h };
+  }
+
+  getWorkingAreaRect() {
+    // During resize, use locked top-left but current size
+    if (this.lockedRect) {
+      return {
+        left: this.lockedRect.left,
+        top: this.lockedRect.top,
+        width: this.workingArea.width,
+        height: this.workingArea.height,
+      };
+    }
+    return this._calcWorkingAreaRect();
+  }
+
   draw() {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.canvas.width / this.dpr, this.canvas.height / this.dpr);
+
+    // Draw working area border
+    if (this.workingArea.enabled && this.workingArea.showBorder) {
+      this.drawWorkingAreaBorder(ctx);
+    }
 
     // Draw particles first (behind orb)
     this.drawParticles(ctx);
@@ -321,6 +368,41 @@ class OrbRenderer {
     ctx.beginPath();
     ctx.arc(this.x, this.y, r * 1.8, 0, Math.PI * 2);
     ctx.stroke();
+  }
+
+  // --- Working area border ---
+  drawWorkingAreaBorder(ctx) {
+    const { left, top, width, height } = this.getWorkingAreaRect();
+
+    // Dim area outside the working area
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+    const screenW = this.canvas.width / this.dpr;
+    const screenH = this.canvas.height / this.dpr;
+    // Top strip
+    ctx.fillRect(0, 0, screenW, top);
+    // Bottom strip
+    ctx.fillRect(0, top + height, screenW, screenH - top - height);
+    // Left strip
+    ctx.fillRect(0, top, left, height);
+    // Right strip
+    ctx.fillRect(left + width, top, screenW - left - width, height);
+
+    // Border
+    ctx.strokeStyle = this.workingArea.resizing
+      ? 'rgba(168, 85, 247, 0.8)'
+      : 'rgba(168, 85, 247, 0.35)';
+    ctx.lineWidth = this.workingArea.resizing ? 2 : 1;
+    ctx.setLineDash(this.workingArea.resizing ? [] : [8, 6]);
+    ctx.strokeRect(left, top, width, height);
+    ctx.setLineDash([]);
+
+    // Size label in resize mode
+    if (this.workingArea.resizing) {
+      const label = `${width} × ${height}`;
+      ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.fillStyle = 'rgba(168, 85, 247, 0.9)';
+      ctx.fillText(label, left + 8, top + 20);
+    }
   }
 
   // --- Particle trail ---

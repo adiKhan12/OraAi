@@ -4,18 +4,22 @@
 //   2. Accessibility mode (optional, pixel-perfect) — when macOS Accessibility permission is granted
 
 const AX_THRESHOLD = 15; // Below this = poor accessibility, use vision fallback
-const FALLBACK_MAX_DIM = 1280; // Downscale screenshots to this max dimension for better AI accuracy
+// Anthropic-recommended resolution — Claude is calibrated for this
+const TARGET_W = 1280;
+const TARGET_H = 800;
 
 class VisionService {
-  constructor(apiKey) {
+  constructor(apiKey, visionModel) {
     this.apiKey = apiKey;
     this.endpoint = 'https://openrouter.ai/api/v1/chat/completions';
-    this.model = 'openai/gpt-4o';
+    this.model = visionModel || 'openai/gpt-4o';
     this.conversationHistory = [];
     this.maxHistory = 10;
+    console.log(`OraAI: Vision model = ${this.model}`);
   }
 
-  async analyze(screenshotBase64, question, screenshotWidth, screenshotHeight, elements) {
+  async analyze(screenshotBase64, question, screenshotWidth, screenshotHeight, elements, screenshotMeta) {
+    this.screenshotMeta = screenshotMeta || {}; // { cropOffsetScreen, screenWidth, screenHeight, scaleFactor }
     // Filter out noise elements (menu bar items with no useful context)
     const usefulElements = (elements || []).filter(
       (e) => e.role !== 'MenuBarItem' && e.role !== 'MenuItem'
@@ -86,14 +90,15 @@ Rules:
   // ──────────────────────────────────────────────
 
   async analyzeWithVisionFallback(screenshotBase64, question, origWidth, origHeight) {
-    // Clicky-style: downscale to 1280px max, use Claude, inline [POINT:x,y:label] format
-    const { base64: scaledBase64, width: scaledW, height: scaledH } =
-      await this.downscaleScreenshot(screenshotBase64, origWidth, origHeight, FALLBACK_MAX_DIM);
+    // Resize to Anthropic-recommended resolution for best coordinate accuracy
+    // Cropped images → force to 1280×800 (Claude is calibrated for this)
+    // Full screen → scale width to 1280, preserve aspect ratio (Clicky-style)
+    const isCropped = !!(this.screenshotMeta?.cropOffsetScreen || this.screenshotMeta?.displayOffsetX);
+    const { base64: scaledBase64, width: scaledW, height: scaledH } = isCropped
+      ? await this.resizeToExact(screenshotBase64, TARGET_W, TARGET_H)
+      : await this.resizeToWidth(screenshotBase64, origWidth, origHeight, TARGET_W);
 
-    const scaleX = origWidth / scaledW;
-    const scaleY = origHeight / scaledH;
-
-    console.log(`OraAI: Vision fallback — ${origWidth}x${origHeight} → ${scaledW}x${scaledH} (scale ${scaleX.toFixed(2)}x)`);
+    console.log(`OraAI: Vision fallback — ${origWidth}x${origHeight} → ${scaledW}x${scaledH} (${isCropped ? 'crop→forced' : 'fullscreen→proportional'})`);
 
     // Clicky-style system prompt: natural text response with [POINT:x,y:label] at the end
     const systemPrompt = `You are OraAI, a friendly screen tutor that helps users navigate applications on their Mac.
@@ -122,8 +127,7 @@ Example response for a screen question:
 Example response for a general question:
 "JavaScript is a programming language used for web development. It runs in browsers and can also be used on servers with Node.js."`;
 
-    // Use Claude Sonnet for the fallback — better at coordinate estimation than GPT-4o
-    const fallbackModel = 'anthropic/claude-sonnet-4';
+    const fallbackModel = this.model;
 
     const userMessage = {
       role: 'user',
@@ -171,7 +175,7 @@ Example response for a general question:
     }
 
     // Parse the [POINT:x,y:label] from the response
-    return this.parseClickyResponse(content, scaleX, scaleY);
+    return this.parseClickyResponse(content, scaledW, scaledH);
   }
 
   // ──────────────────────────────────────────────
@@ -269,7 +273,7 @@ Example response for a general question:
   //  Parse: Clicky-style [POINT:x,y:label] from natural text
   // ──────────────────────────────────────────────
 
-  parseClickyResponse(content, scaleX, scaleY) {
+  parseClickyResponse(content, scaledW, scaledH) {
     // Extract [POINT:x,y:label] or [POINT:x,y] from the response
     const pointMatch = content.match(/\[POINT:(\d+),(\d+)(?::([^\]]*))?\]/);
 
@@ -278,14 +282,22 @@ Example response for a general question:
       const imgY = parseInt(pointMatch[2]);
       const label = pointMatch[3] || 'target';
 
-      // Scale from downscaled image coords to full screen coords
-      // Clamp to image bounds first
-      const clampedX = Math.max(0, Math.min(imgX, Math.round(1280))); // max dim
-      const clampedY = Math.max(0, Math.min(imgY, Math.round(1280)));
-      const screenX = Math.round(clampedX * scaleX);
-      const screenY = Math.round(clampedY * scaleY);
+      // Clamp to the downscaled image bounds
+      const clampedX = Math.max(0, Math.min(imgX, scaledW));
+      const clampedY = Math.max(0, Math.min(imgY, scaledH));
 
-      console.log(`OraAI: Clicky fallback — [POINT:${imgX},${imgY}:${label}] → screen(${screenX},${screenY}) [scale ${scaleX.toFixed(2)}x${scaleY.toFixed(2)}]`);
+      // Like Clicky: map AI coords → screen points in one ratio
+      // screenPoint = AI_coord × (displayRegion / scaledImage) + displayOffset
+      const meta = this.screenshotMeta || {};
+      const displayW = meta.displayRegionW || window.innerWidth;
+      const displayH = meta.displayRegionH || window.innerHeight;
+      const offsetX = meta.displayOffsetX || 0;
+      const offsetY = meta.displayOffsetY || 0;
+
+      const screenX = Math.round(clampedX * (displayW / scaledW) + offsetX);
+      const screenY = Math.round(clampedY * (displayH / scaledH) + offsetY);
+
+      console.log(`OraAI: Clicky — [POINT:${imgX},${imgY}:${label}] → screenPt(${screenX},${screenY}) [img=${scaledW}x${scaledH} region=${displayW}x${displayH} offset=${offsetX},${offsetY}]`);
 
       // Clean the [POINT:...] tag from spoken text
       const spokenText = content.replace(/\s*\[POINT:\d+,\d+(?::[^\]]*)?\]\s*/g, '').trim();
@@ -311,20 +323,38 @@ Example response for a general question:
   }
 
   // ──────────────────────────────────────────────
-  //  Downscale screenshot to max dimension
+  //  Resize strategies for AI coordinate accuracy
   // ──────────────────────────────────────────────
 
-  async downscaleScreenshot(base64, origW, origH, maxDim) {
-    // If already small enough, return as-is
-    if (origW <= maxDim && origH <= maxDim) {
+  // Force to exact dimensions (for cropped images → Anthropic 1280×800)
+  async resizeToExact(base64, targetW, targetH) {
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = `data:image/jpeg;base64,${base64}`;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, targetW, targetH);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    return { base64: dataUrl.split(',')[1], width: targetW, height: targetH };
+  }
+
+  // Scale to target width, preserve aspect ratio (for full-screen → Clicky-style)
+  async resizeToWidth(base64, origW, origH, targetW) {
+    if (origW <= targetW) {
       return { base64, width: origW, height: origH };
     }
 
-    const scale = maxDim / Math.max(origW, origH);
-    const newW = Math.round(origW * scale);
+    const scale = targetW / origW;
+    const newW = targetW;
     const newH = Math.round(origH * scale);
 
-    // Use an offscreen canvas to resize
     const img = new Image();
     await new Promise((resolve, reject) => {
       img.onload = resolve;
@@ -339,11 +369,7 @@ Example response for a general question:
     ctx.drawImage(img, 0, 0, newW, newH);
 
     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    return {
-      base64: dataUrl.split(',')[1],
-      width: newW,
-      height: newH,
-    };
+    return { base64: dataUrl.split(',')[1], width: newW, height: newH };
   }
 
   // ──────────────────────────────────────────────
