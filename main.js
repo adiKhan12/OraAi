@@ -32,6 +32,37 @@ let tray = null;
 let mouseInterval = null;
 let isListening = false;
 let showTranscript = true;
+let currentVisionModel = process.env.VISION_MODEL || 'openai/gpt-4o';
+
+// Working Area — capture zone that follows cursor
+let workingArea = {
+  enabled: false,
+  width: 1280,
+  height: 900,
+  showBorder: true,
+  resizing: false,
+};
+
+const WORKING_AREA_PRESETS = [
+  { label: 'Small (800×600)',   w: 800,  h: 600 },
+  { label: 'Medium (1280×900)', w: 1280, h: 900 },
+  { label: 'Large (1600×1000)', w: 1600, h: 1000 },
+  { label: 'Wide (1920×800)',   w: 1920, h: 800 },
+];
+
+const VISION_MODELS = [
+  { id: 'google/gemma-4-31b-it:free',         label: 'Gemma 4 31B — Free' },
+  { id: 'qwen/qwen3.5-9b',                    label: 'Qwen 3.5 9B — $0.05/M' },
+  { id: 'qwen/qwen3.5-flash-02-23',           label: 'Qwen 3.5 Flash — $0.065/M' },
+  { id: 'bytedance-seed/seed-1.6-flash',      label: 'Seed 1.6 Flash — $0.075/M' },
+  { id: 'bytedance-seed/seed-2.0-mini',       label: 'Seed 2.0 Mini — $0.10/M' },
+  { id: 'google/gemma-4-31b-it',              label: 'Gemma 4 31B — $0.14/M' },
+  { id: 'qwen/qwen3.5-27b',                   label: 'Qwen 3.5 27B — $0.20/M' },
+  { id: 'google/gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite — $0.25/M' },
+  { id: 'qwen/qwen3.5-122b-a10b',             label: 'Qwen 3.5 122B MoE — $0.26/M' },
+  { id: 'google/gemini-3-flash-preview',       label: 'Gemini 3 Flash — $0.50/M' },
+  { id: 'anthropic/claude-sonnet-4.6',         label: 'Claude Sonnet 4.6 — $3/M' },
+];
 
 // ============================================================
 //  APP STARTUP
@@ -124,6 +155,101 @@ function createOverlayWindow() {
 //  TRAY
 // ============================================================
 
+function sendWorkingArea() {
+  overlayWindow?.webContents.send('setting-changed', { workingArea: { ...workingArea } });
+}
+
+function rebuildTrayMenu() {
+  if (!tray) return;
+
+  const modelSubmenu = VISION_MODELS.map((m) => ({
+    label: m.label,
+    type: 'radio',
+    checked: currentVisionModel === m.id,
+    click: () => {
+      currentVisionModel = m.id;
+      overlayWindow?.webContents.send('setting-changed', { visionModel: m.id });
+      console.log(`OraAI: Vision model → ${m.id}`);
+      rebuildTrayMenu();
+    },
+  }));
+
+  const sizeSubmenu = WORKING_AREA_PRESETS.map((p) => ({
+    label: p.label,
+    type: 'radio',
+    checked: workingArea.width === p.w && workingArea.height === p.h,
+    click: () => {
+      workingArea.width = p.w;
+      workingArea.height = p.h;
+      sendWorkingArea();
+      rebuildTrayMenu();
+    },
+  }));
+  sizeSubmenu.push(
+    { type: 'separator' },
+    {
+      label: 'Custom Resize...',
+      click: () => {
+        workingArea.resizing = true;
+        if (!workingArea.enabled) {
+          workingArea.enabled = true;
+          workingArea.showBorder = true;
+        }
+        overlayWindow?.setIgnoreMouseEvents(false);
+        overlayWindow?.setFocusable(true);
+        overlayWindow?.focus();
+        sendWorkingArea();
+        console.log('OraAI: Entering resize mode');
+      },
+    }
+  );
+
+  const workingAreaSubmenu = [
+    {
+      label: 'Enabled',
+      type: 'checkbox',
+      checked: workingArea.enabled,
+      click: (item) => {
+        workingArea.enabled = item.checked;
+        sendWorkingArea();
+        console.log(`OraAI: Working area ${workingArea.enabled ? 'ON' : 'OFF'}`);
+      },
+    },
+    {
+      label: 'Show Border',
+      type: 'checkbox',
+      checked: workingArea.showBorder,
+      click: (item) => {
+        workingArea.showBorder = item.checked;
+        sendWorkingArea();
+      },
+    },
+    { type: 'separator' },
+    { label: 'Size', submenu: sizeSubmenu },
+  ];
+
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'OraAI v1.3', enabled: false },
+    { type: 'separator' },
+    { label: 'Alt+Space to talk', enabled: false },
+    { type: 'separator' },
+    {
+      label: 'Show Transcript',
+      type: 'checkbox',
+      checked: showTranscript,
+      click: (item) => {
+        showTranscript = item.checked;
+        overlayWindow?.webContents.send('setting-changed', { showTranscript });
+      },
+    },
+    { type: 'separator' },
+    { label: 'Working Area', submenu: workingAreaSubmenu },
+    { label: 'Vision Model', submenu: modelSubmenu },
+    { type: 'separator' },
+    { label: 'Quit OraAI', click: () => app.quit() },
+  ]));
+}
+
 function createTray() {
   const size = 16;
   const buf = Buffer.alloc(size * size * 4);
@@ -142,27 +268,6 @@ function createTray() {
   const icon = nativeImage.createFromBuffer(buf, { width: size, height: size, scaleFactor: 1.0 });
   tray = new Tray(icon);
   tray.setToolTip('OraAI');
-
-  function rebuildTrayMenu() {
-    tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'OraAI v1.1', enabled: false },
-      { type: 'separator' },
-      { label: 'Option+Space to talk', enabled: false },
-      { type: 'separator' },
-      {
-        label: 'Show Transcript',
-        type: 'checkbox',
-        checked: showTranscript,
-        click: (item) => {
-          showTranscript = item.checked;
-          overlayWindow?.webContents.send('setting-changed', { showTranscript });
-        },
-      },
-      { type: 'separator' },
-      { label: 'Quit OraAI', click: () => app.quit() },
-    ]));
-  }
-
   rebuildTrayMenu();
 }
 
@@ -191,6 +296,7 @@ function registerHotkey() {
       console.log(`DEBUG MOUSE: screen(${point.x}, ${point.y}) winBounds=${JSON.stringify(wb)} contentBounds=${JSON.stringify(cb)}`);
       overlayWindow?.webContents.send('debug-mouse', point);
     });
+
   } catch (e) { console.error('OraAI: Hotkey error:', e.message); }
 }
 
@@ -312,10 +418,13 @@ ipcMain.handle('get-ax-elements', async () => {
 //  DEBUG: save screenshot to disk
 // ============================================================
 
-ipcMain.handle('save-debug-screenshot', (_, base64) => {
-  const p = '/tmp/oraai-debug.jpg';
+ipcMain.handle('save-debug-screenshot', (_, base64, label) => {
+  const debugDir = path.join(os.homedir(), '.oraai', 'debug');
+  if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+  const filename = `${label || 'screenshot'}.jpg`;
+  const p = path.join(debugDir, filename);
   fs.writeFileSync(p, Buffer.from(base64, 'base64'));
-  console.log('OraAI: Debug screenshot saved to', p);
+  console.log(`OraAI: Debug image saved → ${p}`);
   return p;
 });
 
@@ -326,7 +435,21 @@ ipcMain.handle('save-debug-screenshot', (_, base64) => {
 ipcMain.handle('get-config', () => ({
   openrouterKey: process.env.OPENROUTER_API_KEY,
   elevenlabsKey: process.env.ELEVENLABS_API_KEY,
+  visionModel: process.env.VISION_MODEL || '',
+  workingArea: { ...workingArea },
 }));
+
+// Working area resize completed from renderer
+ipcMain.on('working-area-resize-done', (_, newSize) => {
+  workingArea.width = newSize.width;
+  workingArea.height = newSize.height;
+  workingArea.resizing = false;
+  overlayWindow?.setIgnoreMouseEvents(true);
+  overlayWindow?.setFocusable(false);
+  sendWorkingArea();
+  rebuildTrayMenu();
+  console.log(`OraAI: Working area resized to ${newSize.width}×${newSize.height}`);
+});
 
 // ============================================================
 //  CLEANUP

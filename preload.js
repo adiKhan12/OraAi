@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('oraAPI', {
   getAXElements: () => ipcRenderer.invoke('get-ax-elements'),
   onDebugMouse: (callback) => ipcRenderer.on('debug-mouse', (_, point) => callback(point)),
   onSettingChanged: (callback) => ipcRenderer.on('setting-changed', (_, settings) => callback(settings)),
-  saveDebugScreenshot: (base64) => ipcRenderer.invoke('save-debug-screenshot', base64),
+  saveDebugScreenshot: (base64, label) => ipcRenderer.invoke('save-debug-screenshot', base64, label),
+  workingAreaResizeDone: (size) => ipcRenderer.send('working-area-resize-done', size),
 });

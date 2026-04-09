@@ -45,7 +45,7 @@ class ScreenCapture {
     }
   }
 
-  async capture() {
+  async capture(cropRect) {
     if (!this.ready || !this.video) {
       // Try to reinitialize
       console.log('OraAI: Reinitializing screen capture...');
@@ -66,13 +66,51 @@ class ScreenCapture {
       this.canvas.height = h;
       this.ctx.drawImage(this.video, 0, 0, w, h);
 
-      // Clean screenshot — no grid overlay (grids hide small UI elements)
+      const screenInfo = await window.oraAPI.getScreenInfo();
+      const scaleFactor = screenInfo.scaleFactor || 1;
+      const screenW = screenInfo.width;
+      const screenH = screenInfo.height;
 
-      // Get as JPEG base64
+      // If working area crop is provided, crop to that region
+      if (cropRect) {
+        const cx = Math.round(cropRect.left * scaleFactor);
+        const cy = Math.round(cropRect.top * scaleFactor);
+        const cw = Math.round(cropRect.width * scaleFactor);
+        const ch = Math.round(cropRect.height * scaleFactor);
+
+        // Clamp to video bounds
+        const sx = Math.max(0, Math.min(cx, w - 1));
+        const sy = Math.max(0, Math.min(cy, h - 1));
+        const sw = Math.min(cw, w - sx);
+        const sh = Math.min(ch, h - sy);
+
+        // Create a cropped canvas
+        const cropCanvas = document.createElement('canvas');
+        cropCanvas.width = sw;
+        cropCanvas.height = sh;
+        const cropCtx = cropCanvas.getContext('2d');
+        cropCtx.drawImage(this.canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+        const dataUrl = cropCanvas.toDataURL('image/jpeg', 0.8);
+        const base64 = dataUrl.split(',')[1];
+
+        console.log(`OraAI: Screenshot cropped ${w}x${h} → ${sw}x${sh} (screen region ${cropRect.width}x${cropRect.height} at ${cropRect.left},${cropRect.top})`);
+
+        return {
+          base64,
+          width: sw,
+          height: sh,
+          // The screen-point region this screenshot covers (for coordinate mapping)
+          displayRegionW: cropRect.width,
+          displayRegionH: cropRect.height,
+          displayOffsetX: cropRect.left,
+          displayOffsetY: cropRect.top,
+        };
+      }
+
+      // Full screen capture
       const dataUrl = this.canvas.toDataURL('image/jpeg', 0.8);
       const base64 = dataUrl.split(',')[1];
-
-      const screenInfo = await window.oraAPI.getScreenInfo();
 
       console.log(`OraAI: Screenshot captured ${w}x${h}`);
 
@@ -80,7 +118,11 @@ class ScreenCapture {
         base64,
         width: w,
         height: h,
-        scaleFactor: screenInfo.scaleFactor,
+        // Full screen: region = entire display, offset = 0,0
+        displayRegionW: screenW,
+        displayRegionH: screenH,
+        displayOffsetX: 0,
+        displayOffsetY: 0,
       };
     } catch (err) {
       console.error('OraAI: Frame capture error:', err);

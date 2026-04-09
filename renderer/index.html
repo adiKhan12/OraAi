@@ -9,6 +9,19 @@
   <canvas id="orb-canvas"></canvas>
   <div id="tooltip-container"></div>
   <div id="transcript-bar"></div>
+  <div id="resize-overlay" style="display:none;">
+    <div id="resize-box">
+      <div class="resize-handle" data-dir="nw"></div>
+      <div class="resize-handle" data-dir="ne"></div>
+      <div class="resize-handle" data-dir="sw"></div>
+      <div class="resize-handle" data-dir="se"></div>
+      <div class="resize-edge" data-dir="n"></div>
+      <div class="resize-edge" data-dir="s"></div>
+      <div class="resize-edge" data-dir="w"></div>
+      <div class="resize-edge" data-dir="e"></div>
+    </div>
+    <div id="resize-instructions">Drag corners or edges to resize &bull; Press Escape when done</div>
+  </div>
 
   <script src="states.js"></script>
   <script src="orb.js"></script>

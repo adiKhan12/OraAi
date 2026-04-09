@@ -137,3 +137,62 @@ html, body {
   font-size: 11px;
   margin-bottom: 2px;
 }
+
+/* Resize overlay for working area custom sizing */
+#resize-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 50;
+  cursor: default;
+}
+
+#resize-box {
+  position: absolute;
+  pointer-events: none;
+}
+
+.resize-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: rgba(168, 85, 247, 0.9);
+  border: 2px solid #fff;
+  border-radius: 4px;
+  z-index: 53;
+  pointer-events: auto;
+}
+.resize-handle[data-dir="nw"] { top: -10px; left: -10px; cursor: nwse-resize; }
+.resize-handle[data-dir="ne"] { top: -10px; right: -10px; cursor: nesw-resize; }
+.resize-handle[data-dir="sw"] { bottom: -10px; left: -10px; cursor: nesw-resize; }
+.resize-handle[data-dir="se"] { bottom: -10px; right: -10px; cursor: nwse-resize; }
+
+.resize-edge {
+  position: absolute;
+  background: transparent;
+  z-index: 52;
+  pointer-events: auto;
+}
+.resize-edge[data-dir="n"] { top: -6px; left: 10px; right: 10px; height: 12px; cursor: ns-resize; }
+.resize-edge[data-dir="s"] { bottom: -6px; left: 10px; right: 10px; height: 12px; cursor: ns-resize; }
+.resize-edge[data-dir="w"] { left: -6px; top: 10px; bottom: 10px; width: 12px; cursor: ew-resize; }
+.resize-edge[data-dir="e"] { right: -6px; top: 10px; bottom: 10px; width: 12px; cursor: ew-resize; }
+
+#resize-instructions {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 15, 20, 0.92);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  z-index: 54;
+}
