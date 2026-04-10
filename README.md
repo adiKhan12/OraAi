@@ -12,11 +12,19 @@ You hold Alt+Space and ask something like "how do I add text to this video?" —
 
 It works in any app. Firefox, CapCut, Calendar, VS Code, Blender — whatever you have open.
 
+## Tray menu
+
+Right-click the tray icon to access runtime settings:
+
+- **Vision Model** — switch between 11 models on the fly (from free Gemma 4 to Claude Sonnet 4.6). Sorted by price so you can pick what fits your budget.
+- **Working Area** — enable a capture zone that follows your cursor instead of screenshotting the entire display. Presets: Small (800x600), Medium (1280x900), Large (1600x1000), Wide (1920x800), or custom resize.
+- **Transcript** — toggle the transcript bar on/off
+
 ## How it works
 
 OraAI has two modes:
 
-- **Vision mode** (all platforms) — screenshots your screen, downscales to 1280px, sends to Claude Sonnet which returns exact coordinates. Works with any app on any platform.
+- **Vision mode** (all platforms) — screenshots your screen, downscales to 1280px, sends to your selected vision model (configurable from the tray menu) which returns exact coordinates. Works with any app on any platform.
 - **Pixel-perfect mode** (macOS only, optional) — uses the macOS Accessibility API to read every button, text field, and menu item with exact positions. The AI just picks *which* element to click. Zero coordinate guessing.
 
 ## The orb states
@@ -41,6 +49,7 @@ Download the latest zip for your platform from [Releases](https://github.com/adi
    ```
    OPENROUTER_API_KEY=your-key-here
    ELEVENLABS_API_KEY=your-key-here
+   VISION_MODEL=openai/gpt-4o          # optional — override default model
    ```
 3. First launch: macOS may block it — go to **System Settings → Privacy & Security**, click **"Open Anyway"**
 4. Grant Microphone and Screen sharing when prompted
@@ -57,6 +66,7 @@ Download the latest zip for your platform from [Releases](https://github.com/adi
    ```
    OPENROUTER_API_KEY=your-key-here
    ELEVENLABS_API_KEY=your-key-here
+   VISION_MODEL=openai/gpt-4o          # optional — override default model
    ```
 3. Run `OraAI.exe`
 4. Grant Microphone when prompted, share your screen
@@ -80,7 +90,7 @@ nano ~/.oraai/.env
 
 Run in dev mode:
 ```bash
-npm start
+npm start          # or `npm run dev` for hot-reload
 ```
 
 Build for macOS (includes pixel-perfect accessibility helper):
@@ -110,13 +120,13 @@ This lets OraAI read every UI element directly from macOS — no coordinate gues
 
 - Electron (transparent overlay window)
 - HTML Canvas (orb rendering + animations)
-- Claude Sonnet via OpenRouter (vision + coordinate extraction)
+- Vision AI via OpenRouter (11 models from free to premium — switchable from tray)
 - macOS Accessibility API via Swift helper (optional pixel-perfect mode)
 - ElevenLabs (speech-to-text + text-to-speech)
 
 ## Limitations
 
-- Ultrawide monitors (3440x1440+) may have less accurate coordinates in vision mode
+- Ultrawide monitors (3440x1440+) may have less accurate coordinates in vision mode — use Working Area to improve accuracy
 - Apps with poor accessibility support (like Spotify) use vision mode which may be slightly off
 - Needs API keys for OpenRouter and ElevenLabs
 
