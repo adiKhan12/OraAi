@@ -193,11 +193,23 @@
     }
   };
 
+  // --- Cancel support ---
+  let queryAbort = null;
+
   // --- Hotkey handler ---
   window.oraAPI.onHotkey((action) => {
     if (action === 'start') {
       if (stateMachine.state === OrbState.GUIDING) {
         guideCtrl.abort();
+        ttsService.stopCurrent();
+        stateMachine.transition(OrbState.IDLE);
+        return;
+      }
+      if (stateMachine.state === OrbState.THINKING) {
+        console.log('OraAI: Query cancelled by user');
+        if (queryAbort) queryAbort.abort();
+        ttsService.stopCurrent();
+        hideTranscript();
         stateMachine.transition(OrbState.IDLE);
         return;
       }
@@ -214,14 +226,20 @@
 
   // --- Core pipeline ---
   async function processQuery() {
+    queryAbort = new AbortController();
+    const { signal } = queryAbort;
+
     try {
       // 1. Stop recording
       stateMachine.transition(OrbState.THINKING);
       showTranscript('Processing...', 'thinking');
       const audioBlob = await recorder.stop();
 
+      if (signal.aborted) return;
+
       if (!audioBlob || audioBlob.size < 1000) {
         console.warn('OraAI: Audio too short, ignoring');
+        try { await ttsService.speak("I didn't hear anything. Try holding the hotkey and speaking."); } catch {}
         stateMachine.transition(OrbState.IDLE);
         return;
       }
@@ -235,12 +253,22 @@
         window.oraAPI.getAXElements(),
       ]);
 
+      if (signal.aborted) return;
+
       console.log('OraAI: Transcript:', transcript);
       console.log('OraAI: Screenshot:', screenshot ? `${Math.round(screenshot.base64.length / 1024)}KB` : 'FAILED');
       console.log('OraAI: UI Elements:', axElements.length);
 
       if (!transcript || transcript.trim().length === 0) {
         console.warn('OraAI: Empty transcript');
+        try { await ttsService.speak("I couldn't make out what you said. Try again?"); } catch {}
+        stateMachine.transition(OrbState.IDLE);
+        return;
+      }
+
+      if (!screenshot?.base64) {
+        console.warn('OraAI: Screenshot failed');
+        try { await ttsService.speak("I couldn't capture your screen. Please re-share and try again."); } catch {}
         stateMachine.transition(OrbState.IDLE);
         return;
       }
@@ -259,6 +287,8 @@
         screenshot  // pass full screenshot meta for coordinate mapping
       );
 
+      if (signal.aborted) return;
+
       console.log('OraAI: AI Response:', JSON.stringify(aiResponse).substring(0, 200));
 
       // 4. Respond based on type — AI coords are already in screen points
@@ -275,9 +305,10 @@
       }
 
       // 5. Done
-      stateMachine.transition(OrbState.IDLE);
+      if (!signal.aborted) stateMachine.transition(OrbState.IDLE);
 
     } catch (error) {
+      if (signal.aborted) return;
       console.error('OraAI: Pipeline error:', error);
       hideTranscript();
       const isTimeout = error.message?.includes('timed out');
@@ -288,6 +319,8 @@
         await ttsService.speak(msg);
       } catch {}
       stateMachine.transition(OrbState.IDLE);
+    } finally {
+      queryAbort = null;
     }
   }
 
