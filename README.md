@@ -117,7 +117,7 @@ This lets OraAI read every UI element directly from macOS — no coordinate gues
 ## Limitations
 
 - Ultrawide monitors (3440x1440+) may have less accurate coordinates in vision mode
-- Apps with poor accessibility support (like Spotify) use vision mode which may be slightly off
+- Apps with poor accessibility support (like Firefox, Spotify, Electron apps) use vision mode — most models besides Claude Sonnet give off coordinates in this mode. Claude Sonnet is recommended for best accuracy.
 - Needs API keys for OpenRouter and ElevenLabs
 
 ## Inspiration
