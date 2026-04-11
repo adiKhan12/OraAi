@@ -27,19 +27,59 @@ console.log('OraAI: ELEVENLABS key present:', !!process.env.ELEVENLABS_API_KEY);
 
 const { app, BrowserWindow, globalShortcut, ipcMain, screen, desktopCapturer, session, Tray, Menu, nativeImage, systemPreferences, shell } = require('electron');
 
+// ============================================================
+//  PERSISTENT SETTINGS — saved to ~/.oraai/config.json
+// ============================================================
+
+const CONFIG_PATH = path.join(os.homedir(), '.oraai', 'config.json');
+
+function loadConfig() {
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      const data = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+      console.log('OraAI: Loaded config from', CONFIG_PATH);
+      return data;
+    }
+  } catch (e) {
+    console.warn('OraAI: Failed to load config:', e.message);
+  }
+  return {};
+}
+
+function saveConfig() {
+  try {
+    const dir = path.dirname(CONFIG_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify({
+      visionModel: currentVisionModel,
+      showTranscript,
+      workingArea: {
+        enabled: workingArea.enabled,
+        width: workingArea.width,
+        height: workingArea.height,
+        showBorder: workingArea.showBorder,
+      },
+    }, null, 2));
+  } catch (e) {
+    console.warn('OraAI: Failed to save config:', e.message);
+  }
+}
+
+const savedConfig = loadConfig();
+
 let overlayWindow = null;
 let tray = null;
 let mouseInterval = null;
 let isListening = false;
-let showTranscript = true;
-let currentVisionModel = process.env.VISION_MODEL || 'anthropic/claude-sonnet-4.6';
+let showTranscript = savedConfig.showTranscript ?? true;
+let currentVisionModel = process.env.VISION_MODEL || savedConfig.visionModel || 'anthropic/claude-sonnet-4.6';
 
 // Working Area — capture zone that follows cursor
 let workingArea = {
-  enabled: false,
-  width: 1280,
-  height: 900,
-  showBorder: true,
+  enabled: savedConfig.workingArea?.enabled ?? false,
+  width: savedConfig.workingArea?.width ?? 1280,
+  height: savedConfig.workingArea?.height ?? 900,
+  showBorder: savedConfig.workingArea?.showBorder ?? true,
   resizing: false,
 };
 
@@ -170,6 +210,7 @@ function rebuildTrayMenu() {
       currentVisionModel = m.id;
       overlayWindow?.webContents.send('setting-changed', { visionModel: m.id });
       console.log(`OraAI: Vision model → ${m.id}`);
+      saveConfig();
       rebuildTrayMenu();
     },
   }));
@@ -182,6 +223,7 @@ function rebuildTrayMenu() {
       workingArea.width = p.w;
       workingArea.height = p.h;
       sendWorkingArea();
+      saveConfig();
       rebuildTrayMenu();
     },
   }));
@@ -212,6 +254,7 @@ function rebuildTrayMenu() {
       click: (item) => {
         workingArea.enabled = item.checked;
         sendWorkingArea();
+        saveConfig();
         console.log(`OraAI: Working area ${workingArea.enabled ? 'ON' : 'OFF'}`);
       },
     },
@@ -222,6 +265,7 @@ function rebuildTrayMenu() {
       click: (item) => {
         workingArea.showBorder = item.checked;
         sendWorkingArea();
+        saveConfig();
       },
     },
     { type: 'separator' },
@@ -240,6 +284,7 @@ function rebuildTrayMenu() {
       click: (item) => {
         showTranscript = item.checked;
         overlayWindow?.webContents.send('setting-changed', { showTranscript });
+        saveConfig();
       },
     },
     { type: 'separator' },
@@ -447,6 +492,7 @@ ipcMain.on('working-area-resize-done', (_, newSize) => {
   overlayWindow?.setIgnoreMouseEvents(true);
   overlayWindow?.setFocusable(false);
   sendWorkingArea();
+  saveConfig();
   rebuildTrayMenu();
   console.log(`OraAI: Working area resized to ${newSize.width}×${newSize.height}`);
 });
