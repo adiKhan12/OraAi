@@ -138,6 +138,29 @@ html, body {
   margin-bottom: 2px;
 }
 
+/* Error banner — shown when API keys are missing */
+#error-banner {
+  position: fixed;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(220, 38, 38, 0.92);
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  max-width: 500px;
+  text-align: center;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 30;
+}
+
 /* Resize overlay for working area custom sizing */
 #resize-overlay {
   position: fixed;

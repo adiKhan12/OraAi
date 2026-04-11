@@ -6,6 +6,17 @@
   const canvas = document.getElementById('orb-canvas');
   const transcriptBar = document.getElementById('transcript-bar');
 
+  // --- Check API keys ---
+  const errorBanner = document.getElementById('error-banner');
+  const missingKeys = [];
+  if (!config.openrouterKey) missingKeys.push('OPENROUTER_API_KEY');
+  if (!config.elevenlabsKey) missingKeys.push('ELEVENLABS_API_KEY');
+  if (missingKeys.length > 0) {
+    errorBanner.textContent = `Missing API keys: ${missingKeys.join(', ')} — add them to ~/.oraai/.env`;
+    errorBanner.style.display = 'block';
+    console.error(`OraAI: Missing keys: ${missingKeys.join(', ')}`);
+  }
+
   const stateMachine = new StateMachine();
   const orb = new OrbRenderer(canvas);
   const recorder = new AudioRecorder();
@@ -269,8 +280,12 @@
     } catch (error) {
       console.error('OraAI: Pipeline error:', error);
       hideTranscript();
+      const isTimeout = error.message?.includes('timed out');
+      const msg = isTimeout
+        ? 'That took too long. Please try again.'
+        : 'Sorry, something went wrong. Please try again.';
       try {
-        await ttsService.speak('Sorry, something went wrong. Please try again.');
+        await ttsService.speak(msg);
       } catch {}
       stateMachine.transition(OrbState.IDLE);
     }

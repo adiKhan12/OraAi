@@ -32,7 +32,7 @@ let tray = null;
 let mouseInterval = null;
 let isListening = false;
 let showTranscript = true;
-let currentVisionModel = process.env.VISION_MODEL || 'openai/gpt-4o';
+let currentVisionModel = process.env.VISION_MODEL || 'anthropic/claude-sonnet-4.6';
 
 // Working Area — capture zone that follows cursor
 let workingArea = {

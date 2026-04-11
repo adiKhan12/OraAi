@@ -7,12 +7,13 @@ const AX_THRESHOLD = 15; // Below this = poor accessibility, use vision fallback
 // Anthropic-recommended resolution — Claude is calibrated for this
 const TARGET_W = 1280;
 const TARGET_H = 800;
+const API_TIMEOUT_MS = 30000; // 30s timeout for vision API calls
 
 class VisionService {
   constructor(apiKey, visionModel) {
     this.apiKey = apiKey;
     this.endpoint = 'https://openrouter.ai/api/v1/chat/completions';
-    this.model = visionModel || 'openai/gpt-4o';
+    this.model = visionModel || 'anthropic/claude-sonnet-4.6';
     this.conversationHistory = [];
     this.maxHistory = 10;
     console.log(`OraAI: Vision model = ${this.model}`);
@@ -143,21 +144,33 @@ Example response for a general question:
       userMessage,
     ];
 
-    const response = await fetch(this.endpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://oraai.app',
-        'X-Title': 'OraAI',
-      },
-      body: JSON.stringify({
-        model: fallbackModel,
-        messages,
-        max_tokens: 1024,
-        temperature: 0.3,
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+    let response;
+    try {
+      response = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://oraai.app',
+          'X-Title': 'OraAI',
+        },
+        body: JSON.stringify({
+          model: fallbackModel,
+          messages,
+          max_tokens: 1024,
+          temperature: 0.3,
+        }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') throw new Error('Vision request timed out — try again');
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -197,21 +210,33 @@ Example response for a general question:
       userMessage,
     ];
 
-    const response = await fetch(this.endpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://oraai.app',
-        'X-Title': 'OraAI',
-      },
-      body: JSON.stringify({
-        model: this.model,
-        messages,
-        max_tokens: 1024,
-        temperature: 0.3,
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+    let response;
+    try {
+      response = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://oraai.app',
+          'X-Title': 'OraAI',
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages,
+          max_tokens: 1024,
+          temperature: 0.3,
+        }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') throw new Error('Vision request timed out — try again');
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const error = await response.text();
