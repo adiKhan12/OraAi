@@ -124,12 +124,17 @@
 
   // --- Transcript bar helpers ---
   let transcriptEnabled = true;
+  let agentMode = config.agentMode ?? false;
 
   window.oraAPI.onSettingChanged((settings) => {
     if (settings.showTranscript !== undefined) {
       transcriptEnabled = settings.showTranscript;
       if (!transcriptEnabled) hideTranscript();
       console.log('OraAI: Transcript bar', transcriptEnabled ? 'ON' : 'OFF');
+    }
+    if (settings.agentMode !== undefined) {
+      agentMode = settings.agentMode;
+      console.log(`OraAI: Agent mode ${agentMode ? 'ON' : 'OFF'}`);
     }
     if (settings.visionModel) {
       visionService.model = settings.visionModel;
@@ -208,12 +213,17 @@
           ttsService.stopCurrent();
           hideTranscript();
           stateMachine.transition(OrbState.IDLE);
+          hotkeyCooldown = true;
+          setTimeout(() => { hotkeyCooldown = false; }, 500);
           return;
         }
         if (stateMachine.state === OrbState.GUIDING) {
           guideCtrl.abort();
+          if (queryAbort) queryAbort.abort();
           ttsService.stopCurrent();
           stateMachine.transition(OrbState.IDLE);
+          hotkeyCooldown = true;
+          setTimeout(() => { hotkeyCooldown = false; }, 500);
           return;
         }
         return;
@@ -231,6 +241,94 @@
       }
     }
   });
+
+  // --- Agent mode loop ---
+  async function runAgentLoop(userRequest, screenshot, signal) {
+    const MAX_STEPS = 15;
+    visionService.clearConversation();
+
+    stateMachine.transition(OrbState.GUIDING);
+    let currentScreenshot = screenshot;
+
+    for (let step = 0; step < MAX_STEPS; step++) {
+      if (signal.aborted) {
+        orb.returnToMouse();
+        return;
+      }
+
+      console.log(`OraAI: Agent step ${step + 1}/${MAX_STEPS}`);
+
+      let action;
+      try {
+        action = await visionService.agentStep(
+          currentScreenshot.base64,
+          userRequest,
+          currentScreenshot.width,
+          currentScreenshot.height,
+          currentScreenshot,
+          signal  // pass abort signal so hotkey cancel works immediately
+        );
+      } catch (err) {
+        if (signal.aborted) { orb.returnToMouse(); return; }
+        console.error('OraAI: Agent step failed:', err.message);
+        await ttsService.speak('Sorry, I ran into an error. Let me try again.');
+        break;
+      }
+
+      if (signal.aborted) { orb.returnToMouse(); return; }
+
+      console.log(`OraAI: Agent action → ${action.action}`);
+
+      if (action.action === 'done') {
+        if (action.says) {
+          try { await ttsService.speak(action.says); } catch {}
+        }
+        break;
+      }
+
+      if (action.action === 'wait') {
+        if (action.says) try { await ttsService.speak(action.says); } catch {}
+        await new Promise(r => setTimeout(r, action.ms || 1000));
+      } else if (action.action === 'click' || action.action === 'doubleclick' || action.action === 'rightclick') {
+        orb.setGuideTarget(action.x, action.y - windowY);
+        await new Promise(r => setTimeout(r, 100));
+        const result = await window.oraAPI.performAction({ action: action.action, x: action.x, y: action.y });
+        if (!result.ok) console.error('OraAI: Action failed:', result.error);
+        if (action.says) try { await ttsService.speak(action.says); } catch {}
+        await new Promise(r => setTimeout(r, 800));
+      } else if (action.action === 'type') {
+        const result = await window.oraAPI.performAction({ action: 'type', text: action.text });
+        if (!result.ok) console.error('OraAI: Type failed:', result.error);
+        if (action.says) try { await ttsService.speak(action.says); } catch {}
+        await new Promise(r => setTimeout(r, 500));
+      } else if (action.action === 'key') {
+        const result = await window.oraAPI.performAction({ action: 'key', key: action.key });
+        if (!result.ok) console.error('OraAI: Key failed:', result.error);
+        if (action.says) try { await ttsService.speak(action.says); } catch {}
+        await new Promise(r => setTimeout(r, 400));
+      } else if (action.action === 'scroll') {
+        const result = await window.oraAPI.performAction({ action: 'scroll', dx: action.dx || 0, dy: action.dy || 0 });
+        if (!result.ok) console.error('OraAI: Scroll failed:', result.error);
+        if (action.says) try { await ttsService.speak(action.says); } catch {}
+        await new Promise(r => setTimeout(r, 400));
+      }
+
+      if (signal.aborted) { orb.returnToMouse(); return; }
+
+      if (action.action === 'done') break;
+
+      // Capture next screenshot for the next iteration
+      const cropRect = workingArea.enabled ? orb.getWorkingAreaRect() : null;
+      currentScreenshot = await screenCapture.capture(cropRect);
+      if (!currentScreenshot) {
+        console.warn('OraAI: Agent lost screen capture');
+        await ttsService.speak("I lost the screen. Please try again.");
+        break;
+      }
+    }
+
+    orb.returnToMouse();
+  }
 
   // --- Core pipeline ---
   async function processQuery() {
@@ -284,35 +382,41 @@
       // Show transcript immediately so user knows they were heard
       showTranscript(`"${transcript}"`, 'heard');
 
-      // 3. Send to Vision AI
-      console.log('OraAI: Sending to AI...');
-      const aiResponse = await visionService.analyze(
-        screenshot?.base64 || '',
-        transcript,
-        screenshot?.width || window.innerWidth,
-        screenshot?.height || window.innerHeight,
-        axElements,
-        screenshot  // pass full screenshot meta for coordinate mapping
-      );
+      // 3. Route based on mode
+      hideTranscript();
 
-      if (signal.aborted) return;
-
-      console.log('OraAI: AI Response:', JSON.stringify(aiResponse).substring(0, 200));
-
-      // 4. Respond based on type — AI coords are already in screen points
-      if (aiResponse.type === 'speak') {
-        console.log('OraAI: Speaking answer (no guide)');
-        hideTranscript();
-        try {
-          await ttsService.speak(aiResponse.answer || aiResponse.summary || 'I don\'t have an answer for that.');
-        } catch {}
+      if (agentMode) {
+        // Agent mode: reactive loop — screenshot → AI → act → repeat
+        console.log('OraAI: Agent mode — entering action loop');
+        await runAgentLoop(transcript, screenshot, signal);
       } else {
-        hideTranscript();
-        stateMachine.transition(OrbState.GUIDING);
-        await guideCtrl.runGuide(aiResponse);
+        // Normal mode: one-shot analyze → speak or guide
+        console.log('OraAI: Sending to AI...');
+        const aiResponse = await visionService.analyze(
+          screenshot?.base64 || '',
+          transcript,
+          screenshot?.width || window.innerWidth,
+          screenshot?.height || window.innerHeight,
+          axElements,
+          screenshot
+        );
+
+        if (signal.aborted) return;
+
+        console.log('OraAI: AI Response:', JSON.stringify(aiResponse).substring(0, 200));
+
+        if (aiResponse.type === 'speak') {
+          console.log('OraAI: Speaking answer (no guide)');
+          try {
+            await ttsService.speak(aiResponse.answer || aiResponse.summary || 'I don\'t have an answer for that.');
+          } catch {}
+        } else {
+          stateMachine.transition(OrbState.GUIDING);
+          await guideCtrl.runGuide(aiResponse);
+        }
       }
 
-      // 5. Done
+      // 4. Done
       if (!signal.aborted) stateMachine.transition(OrbState.IDLE);
 
     } catch (error) {

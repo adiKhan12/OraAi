@@ -54,6 +54,7 @@ function saveConfig() {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify({
       visionModel: currentVisionModel,
       showTranscript,
+      agentMode,
       workingArea: {
         enabled: workingArea.enabled,
         width: workingArea.width,
@@ -73,6 +74,7 @@ let tray = null;
 let mouseInterval = null;
 let isListening = false;
 let showTranscript = savedConfig.showTranscript ?? true;
+let agentMode = savedConfig.agentMode ?? false;
 let currentVisionModel = process.env.VISION_MODEL || savedConfig.visionModel || 'anthropic/claude-sonnet-4.6';
 
 // Working Area — capture zone that follows cursor
@@ -288,6 +290,17 @@ function rebuildTrayMenu() {
         saveConfig();
       },
     },
+    {
+      label: 'Agent Mode (auto-click/type)',
+      type: 'checkbox',
+      checked: agentMode,
+      click: (item) => {
+        agentMode = item.checked;
+        overlayWindow?.webContents.send('setting-changed', { agentMode: item.checked });
+        saveConfig();
+        console.log(`OraAI: Agent mode ${agentMode ? 'ON' : 'OFF'}`);
+      },
+    },
     { type: 'separator' },
     { label: 'Working Area', submenu: workingAreaSubmenu },
     { label: 'Vision Model', submenu: modelSubmenu },
@@ -482,8 +495,56 @@ ipcMain.handle('get-config', () => ({
   openrouterKey: process.env.OPENROUTER_API_KEY,
   elevenlabsKey: process.env.ELEVENLABS_API_KEY,
   visionModel: process.env.VISION_MODEL || '',
+  agentMode,
   workingArea: { ...workingArea },
 }));
+
+// Find a helper binary across dev and packaged paths
+function findHelper(name) {
+  const dirs = [
+    path.join(__dirname, 'helpers'),
+    process.resourcesPath || '',
+    path.join(process.resourcesPath || '', 'helpers'),
+    path.join(__dirname, '..', 'Resources'),
+    path.join(__dirname, '..', 'helpers'),
+  ];
+  for (const d of dirs) {
+    const hp = path.join(d, name);
+    if (fs.existsSync(hp)) return hp;
+  }
+  return null;
+}
+
+ipcMain.handle('perform-action', async (_, params) => {
+  if (!isMac) return { ok: false, error: 'Not available on Windows' };
+
+  const helperPath = findHelper('input-actions');
+  if (!helperPath) {
+    console.error('OraAI: input-actions helper not found');
+    return { ok: false, error: 'Helper not found' };
+  }
+
+  const { action, x, y, text, key, dx, dy } = params;
+  const args = [action];
+  if (x !== undefined) { args.push(String(Math.round(x))); args.push(String(Math.round(y))); }
+  if (text !== undefined) args.push(text);
+  if (key !== undefined) args.push(key);
+  if (dx !== undefined) { args.push(String(Math.round(dx))); args.push(String(Math.round(dy))); }
+
+  console.log(`OraAI: Action — ${args.join(' ')}`);
+
+  return new Promise((resolve) => {
+    const { execFile } = require('child_process');
+    execFile(helperPath, args, { timeout: 5000 }, (err, stdout) => {
+      if (err) {
+        console.error('OraAI: Action failed:', err.message);
+        resolve({ ok: false, error: err.message });
+      } else {
+        resolve({ ok: true });
+      }
+    });
+  });
+});
 
 // Working area resize completed from renderer
 ipcMain.on('working-area-resize-done', (_, newSize) => {
