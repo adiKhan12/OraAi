@@ -195,30 +195,38 @@
 
   // --- Cancel support ---
   let queryAbort = null;
+  let queryInProgress = false;
+  let hotkeyCooldown = false;
 
   // --- Hotkey handler ---
   window.oraAPI.onHotkey((action) => {
     if (action === 'start') {
-      if (stateMachine.state === OrbState.GUIDING) {
-        guideCtrl.abort();
-        ttsService.stopCurrent();
-        stateMachine.transition(OrbState.IDLE);
+      if (queryInProgress) {
+        if (stateMachine.state === OrbState.THINKING) {
+          console.log('OraAI: Query cancelled by user');
+          if (queryAbort) queryAbort.abort();
+          ttsService.stopCurrent();
+          hideTranscript();
+          stateMachine.transition(OrbState.IDLE);
+          return;
+        }
+        if (stateMachine.state === OrbState.GUIDING) {
+          guideCtrl.abort();
+          ttsService.stopCurrent();
+          stateMachine.transition(OrbState.IDLE);
+          return;
+        }
         return;
       }
-      if (stateMachine.state === OrbState.THINKING) {
-        console.log('OraAI: Query cancelled by user');
-        if (queryAbort) queryAbort.abort();
-        ttsService.stopCurrent();
-        hideTranscript();
-        stateMachine.transition(OrbState.IDLE);
-        return;
-      }
+      if (hotkeyCooldown) return;
       stateMachine.transition(OrbState.LISTENING);
       silenceTriggered = false;
       recorder.start();
     }
     if (action === 'stop') {
-      if (stateMachine.state === OrbState.LISTENING) {
+      if (stateMachine.state === OrbState.LISTENING && !silenceTriggered) {
+        queryInProgress = true;
+        silenceTriggered = true;
         processQuery();
       }
     }
@@ -321,6 +329,7 @@
       stateMachine.transition(OrbState.IDLE);
     } finally {
       queryAbort = null;
+      queryInProgress = false;
     }
   }
 

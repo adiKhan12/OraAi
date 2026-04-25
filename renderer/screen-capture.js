@@ -91,7 +91,7 @@ class ScreenCapture {
         const cropCtx = cropCanvas.getContext('2d');
         cropCtx.drawImage(this.canvas, sx, sy, sw, sh, 0, 0, sw, sh);
 
-        const dataUrl = cropCanvas.toDataURL('image/jpeg', 0.8);
+        const dataUrl = cropCanvas.toDataURL('image/jpeg', 0.92);
         const base64 = dataUrl.split(',')[1];
 
         console.log(`OraAI: Screenshot cropped ${w}x${h} → ${sw}x${sh} (screen region ${cropRect.width}x${cropRect.height} at ${cropRect.left},${cropRect.top})`);
@@ -109,7 +109,7 @@ class ScreenCapture {
       }
 
       // Full screen capture
-      const dataUrl = this.canvas.toDataURL('image/jpeg', 0.8);
+      const dataUrl = this.canvas.toDataURL('image/jpeg', 0.92);
       const base64 = dataUrl.split(',')[1];
 
       console.log(`OraAI: Screenshot captured ${w}x${h}`);

@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const pkg = require('./package.json');
 
 // Load .env from multiple possible locations (dev vs packaged)
 let envLoaded = false;
@@ -273,7 +274,7 @@ function rebuildTrayMenu() {
   ];
 
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'OraAI v1.3', enabled: false },
+    { label: `OraAI v${pkg.version}`, enabled: false },
     { type: 'separator' },
     { label: 'Alt+Space to talk', enabled: false },
     { type: 'separator' },

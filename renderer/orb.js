@@ -113,8 +113,8 @@ class OrbRenderer {
     // Smooth radius transition
     this.radius += (this.targetRadius - this.radius) * 0.1;
 
-    // Spawn particles in guiding mode
-    if (this.state === OrbState.GUIDING && Math.random() < 0.4) {
+    // Spawn particles in guiding mode (cap at 80 for performance)
+    if (this.state === OrbState.GUIDING && Math.random() < 0.4 && this.particles.length < 80) {
       this.particles.push({
         x: this.x + (Math.random() - 0.5) * 10,
         y: this.y + (Math.random() - 0.5) * 10,
