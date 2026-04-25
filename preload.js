@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld('oraAPI', {
   onSettingChanged: (callback) => ipcRenderer.on('setting-changed', (_, settings) => callback(settings)),
   saveDebugScreenshot: (base64, label) => ipcRenderer.invoke('save-debug-screenshot', base64, label),
   workingAreaResizeDone: (size) => ipcRenderer.send('working-area-resize-done', size),
+  performAction: (params) => ipcRenderer.invoke('perform-action', params),
 });

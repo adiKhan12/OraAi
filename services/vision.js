@@ -398,6 +398,155 @@ Example response for a general question:
   }
 
   // ──────────────────────────────────────────────
+  //  MODE 3: Agent Mode — reactive loop, single action per call
+  // ──────────────────────────────────────────────
+
+  async agentStep(screenshotBase64, userRequest, origWidth, origHeight, screenshotMeta, externalSignal) {
+    this.screenshotMeta = screenshotMeta || {};
+
+    const { base64: scaledBase64, width: scaledW, height: scaledH } =
+      await this.resizeToWidth(screenshotBase64, origWidth, origHeight, TARGET_W);
+
+    console.log(`OraAI: Agent step — ${origWidth}x${origHeight} → ${scaledW}x${scaledH}`);
+
+    const systemPrompt = `You are OraAI Agent, controlling the user's macOS desktop. You see screenshots and decide the SINGLE next action to complete the user's request.
+
+USER'S REQUEST: ${userRequest}
+
+AVAILABLE ACTIONS (return exactly ONE):
+{"action":"click","x":640,"y":400,"says":"I'll click this for you"}
+{"action":"doubleclick","x":640,"y":400,"says":"Opening this..."}
+{"action":"rightclick","x":640,"y":400,"says":"Opening menu..."}
+{"action":"type","text":"hello world","says":"Typing this"}
+{"action":"key","key":"return","says":"Pressing Enter"}
+{"action":"scroll","dy":-300,"says":"Scrolling down"}
+{"action":"wait","ms":2000,"says":"Waiting for the app to load..."}
+{"action":"done","says":"All done! Here's what happened..."}
+
+COORDINATES: This screenshot is ${scaledW}x${scaledH} pixels. (0,0)=top-left, (${scaledW},${scaledH})=bottom-right. Look very carefully at UI positions.
+
+KEYS: return, enter, escape, tab, space, backspace, delete, up, down, left, right, pageup, pagedown, home, end
+MODIFIER+KEY: cmd+c, cmd+v, cmd+a, cmd+z, cmd+x, cmd+t, cmd+w, cmd+q, cmd+tab, shift+tab
+
+RULES:
+1. Return ONLY valid JSON — one action per response. No explanation outside JSON.
+2. Think step by step: what is the SINGLE best next action?
+3. If the screen is loading or changing, use "wait" to let it settle.
+4. When the user's request is fully complete, use "done".
+5. If something went wrong or you're stuck, use "done" with an explanation in "says".
+6. For click/doubleclick/rightclick, the x,y must be the CENTER of the target element.
+7. For scroll, positive dy=down, negative dy=up.`;
+
+    const userMessage = {
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${scaledBase64}` } },
+        { type: 'text', text: 'Next action?' },
+      ],
+    };
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...this.conversationHistory,
+      userMessage,
+    ];
+
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), API_TIMEOUT_MS);
+    const combinedSignal = externalSignal
+      ? AbortSignal.any([externalSignal, timeoutController.signal])
+      : timeoutController.signal;
+
+    let response;
+    try {
+      response = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://oraai.app',
+          'X-Title': 'OraAI',
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages,
+          max_tokens: 512,
+          temperature: 0.2,
+        }),
+        signal: combinedSignal,
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') throw new Error('Agent request timed out');
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Agent API failed (${response.status}): ${error}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content || '';
+
+    this.conversationHistory.push({ role: 'user', content: 'Next action?' });
+    this.conversationHistory.push({ role: 'assistant', content });
+    while (this.conversationHistory.length > this.maxHistory * 2) {
+      this.conversationHistory.shift();
+    }
+
+    return this.parseAgentResponse(content, scaledW, scaledH);
+  }
+
+  parseAgentResponse(content, scaledW, scaledH) {
+    let parsed = this.extractJSON(content);
+
+    if (!parsed || !parsed.action) {
+      console.warn('OraAI: Agent fallback — no valid action, treating as done');
+      return { action: 'done', says: content.substring(0, 200) };
+    }
+
+    if (parsed.action === 'done' || parsed.action === 'wait') {
+      return parsed;
+    }
+
+    if (parsed.action === 'type' || parsed.action === 'key') {
+      return parsed;
+    }
+
+    if (parsed.action === 'scroll') {
+      parsed.dx = parsed.dx || 0;
+      parsed.dy = parsed.dy || 0;
+      return parsed;
+    }
+
+    if (parsed.action === 'click' || parsed.action === 'doubleclick' || parsed.action === 'rightclick') {
+      const imgX = Math.round(Number(parsed.x) || scaledW / 2);
+      const imgY = Math.round(Number(parsed.y) || scaledH / 2);
+      const clampedX = Math.max(0, Math.min(imgX, scaledW));
+      const clampedY = Math.max(0, Math.min(imgY, scaledH));
+
+      const meta = this.screenshotMeta || {};
+      const displayW = meta.displayRegionW || window.innerWidth;
+      const displayH = meta.displayRegionH || window.innerHeight;
+      const offsetX = meta.displayOffsetX || 0;
+      const offsetY = meta.displayOffsetY || 0;
+
+      parsed.x = Math.round(clampedX * (displayW / scaledW) + offsetX);
+      parsed.y = Math.round(clampedY * (displayH / scaledH) + offsetY);
+
+      console.log(`OraAI: Agent click — image(${imgX},${imgY}) → screen(${parsed.x},${parsed.y}) [region=${displayW}x${displayH} offset=${offsetX},${offsetY}]`);
+    }
+
+    return parsed;
+  }
+
+  clearConversation() {
+    this.conversationHistory = [];
+  }
+
+  // ──────────────────────────────────────────────
   //  Helpers
   // ──────────────────────────────────────────────
 

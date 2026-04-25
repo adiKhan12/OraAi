@@ -14,16 +14,6 @@ struct UIElement: Codable {
     let h: Int
 }
 
-let interactiveRoles: Set<String> = [
-    "AXButton", "AXTextField", "AXTextArea", "AXCheckBox",
-    "AXRadioButton", "AXPopUpButton", "AXMenuItem", "AXLink",
-    "AXComboBox", "AXSlider", "AXTab", "AXTabGroup",
-    "AXToolbar", "AXMenuBarItem", "AXMenuButton", "AXImage",
-    "AXStaticText", "AXCell", "AXRow", "AXColumn",
-    "AXIncrementor", "AXDisclosureTriangle", "AXColorWell",
-    "AXSearchField", "AXValueIndicator", "AXSegmentedControl"
-]
-
 func getLabel(_ element: AXUIElement) -> String {
     // Try multiple attributes for a useful label
     for attr in [kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute, kAXRoleDescriptionAttribute] {

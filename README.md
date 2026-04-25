@@ -10,12 +10,15 @@ A floating AI screen companion for macOS and Windows. It follows your cursor, li
 
 You hold Alt+Space and ask something like "how do I add text to this video?" — OraAI takes a screenshot, sends it to a vision AI, and then the orb detaches from your cursor and floats to the exact button you need to press. It talks you through each step.
 
+**New: Agent Mode** — toggle it on in the tray menu and OraAI will actually *click, type, and navigate* for you, not just point. Say "open Safari and search for the weather" and watch it happen.
+
 It works in any app. Firefox, CapCut, Calendar, VS Code, Blender — whatever you have open.
 
 ## How it works
 
-OraAI has two modes:
+OraAI has three modes:
 
+- **Agent mode** (macOS, toggle in tray) — reactive loop: screenshot → AI decides next action → orb moves → clicks/types/scrolls → new screenshot → repeat. Uses CGEvent to simulate real mouse/keyboard input. Works on any macOS app even without Accessibility permission.
 - **Vision mode** (all platforms) — screenshots your screen, downscales to 1280px, sends to Claude Sonnet which returns exact coordinates. Works with any app on any platform.
 - **Pixel-perfect mode** (macOS only, optional) — uses the macOS Accessibility API to read every button, text field, and menu item with exact positions. The AI just picks *which* element to click. Zero coordinate guessing.
 
@@ -24,7 +27,8 @@ OraAI has two modes:
 - **Idle** — soft purple glow, follows your cursor
 - **Listening** — warm amber pulse with expanding rings (recording your voice)
 - **Thinking** — color-cycling spinner (transcribing + screenshotting + querying AI)
-- **Guiding** — bright purple/gold, detaches from cursor, moves to targets with particle trail
+- **Guiding** — bright purple/gold, detaches from cursor, moves to targets with particle trail. In Agent Mode, the orb moves to each target before performing the action (click, type, etc.)
+- **Agent Mode active** — orb performs real clicks and keystrokes on your screen. Press Alt+Space again to cancel at any time.
 
 ## Quick install
 
@@ -99,12 +103,23 @@ OraAI works out of the box using AI vision. For pixel-perfect accuracy on macOS,
 
 This lets OraAI read every UI element directly from macOS — no coordinate guessing.
 
+## Agent Mode (macOS)
+
+Right-click the tray icon and toggle **Agent Mode (auto-click/type)** ON. Now when you speak a command, OraAI will actually perform the actions — clicking buttons, typing text, pressing keys, and scrolling — instead of just pointing at them.
+
+- Works with **any** macOS app — uses CGEvent at the OS level, no Accessibility permission needed
+- Reactive loop: takes a screenshot after each action so it always knows the current screen state
+- Max 15 steps per query — cancel anytime with Alt+Space
+- For pixel-perfect clicking on apps that support Accessibility, enable the optional Accessibility permission above
+
+> **Windows note:** Agent Mode is macOS-only for now. Vision mode (point-and-guide) works on Windows. Windows Agent Mode support coming in a future release.
+
 ## Platform support
 
-| Platform | Vision mode | Pixel-perfect mode |
-|----------|------------|-------------------|
-| **macOS** | Works out of the box | Enable Accessibility permission |
-| **Windows** | Works out of the box | Coming soon |
+| Platform | Vision mode | Pixel-perfect mode | Agent Mode |
+|----------|------------|-------------------|------------|
+| **macOS** | Works out of the box | Enable Accessibility permission | Toggle in tray menu |
+| **Windows** | Works out of the box | Coming soon | Coming soon |
 
 ## Tech stack
 
@@ -112,6 +127,7 @@ This lets OraAI read every UI element directly from macOS — no coordinate gues
 - HTML Canvas (orb rendering + animations)
 - Claude Sonnet via OpenRouter (vision + coordinate extraction)
 - macOS Accessibility API via Swift helper (optional pixel-perfect mode)
+- CGEvent Quartz via Swift helper (agent mode input simulation — click, type, scroll)
 - ElevenLabs (speech-to-text + text-to-speech)
 
 ## Limitations

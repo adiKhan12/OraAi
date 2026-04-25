@@ -21,8 +21,10 @@ jobs:
       - name: Install dependencies
         run: npm install && npm install --save-dev @electron/packager
 
-      - name: Compile accessibility helper
-        run: swiftc -O -o helpers/ax-elements helpers/ax-elements.swift -framework Cocoa
+      - name: Compile helpers
+        run: |
+          swiftc -O -o helpers/ax-elements helpers/ax-elements.swift -framework Cocoa
+          swiftc -O -o helpers/input-actions helpers/input-actions.swift -framework CoreGraphics
 
       - name: Package app
         run: |
@@ -34,7 +36,8 @@ jobs:
             --app-bundle-id=com.oraai.app \
             --app-version="${VERSION}" \
             --extend-info=Info.plist \
-            --extra-resource=helpers/ax-elements
+            --extra-resource=helpers/ax-elements \
+            --extra-resource=helpers/input-actions
 
       - name: Sign and zip
         run: |
